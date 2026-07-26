@@ -43,6 +43,14 @@ Use Ctrl+P, `/translate`, or Ctrl+Shift+T to toggle translation. The prompt badg
 
 Translation is fail-open: if the translation model fails, the original text is sent unchanged.
 
+## Publishing
+
+Releases are published to npm by GitHub Actions when a GitHub Release is published. The release tag must match the package version, for example `v0.1.0` for version `0.1.0`.
+
+The first npm publication must be performed manually. After the package exists, configure npm Trusted Publishing for `dogalyir/opencode-auto-translate` using workflow `publish.yml` and GitHub environment `npm`. Subsequent releases only require updating `version`, merging to `main`, and publishing the matching GitHub Release.
+
+CI runs TypeScript typechecking, Bun tests, Oxlint, jscpd, Knip, Fallow dead-code and duplication analysis, the build, and an advisory Fallow health analysis.
+
 ## Development
 
 ```bash
