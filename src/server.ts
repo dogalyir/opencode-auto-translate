@@ -26,7 +26,8 @@ const messagesSchema = z.array(
 
 function parsePluginOptions(options: unknown): PluginOptions {
   const parsed = pluginOptionsSchema.safeParse(options)
-  return parsed.success ? parsed.data : {}
+  if (parsed.success) return parsed.data
+  return pluginOptionsSchema.parse({})
 }
 
 function extractTranslation(value: unknown): string | undefined {
@@ -101,6 +102,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
           query: { directory },
           body: {
             model,
+            ...(pluginOptions.variant === undefined ? {} : { variant: pluginOptions.variant }),
             agent: TRANSLATION_AGENT,
             system: TRANSLATION_MODEL_INSTRUCTION,
             tools: {},
@@ -162,7 +164,9 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
       }
       const configuredModel = z.string().safeParse(configData.small_model)
       const configuredReference = configuredModel.success ? parseModelRef(configuredModel.data) : undefined
-      const model = configuredReference ?? (pluginOptions.small_model ? parseModelRef(pluginOptions.small_model) : undefined)
+       const configuredPluginModel = pluginOptions.model === undefined ? undefined : parseModelRef(pluginOptions.model)
+       const configuredOptionModel = pluginOptions.small_model === undefined ? undefined : parseModelRef(pluginOptions.small_model)
+       const model = configuredPluginModel ?? configuredReference ?? configuredOptionModel
       if (model === undefined) {
         await log("warn", "Translation is enabled but small_model is not configured")
         return

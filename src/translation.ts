@@ -4,10 +4,15 @@ export const TRANSLATION_EVENT = "opencode-auto-translate.toggle"
 export const TRANSLATION_SERVICE = "opencode-auto-translate"
 export const TRANSLATION_AGENT = "general"
 export const TRANSLATION_MODEL_INSTRUCTION = "You are a precise translation engine. Translate user text to English only."
-const TRANSLATION_TARGET = "English"
+const TRANSLATION_SOURCE = "the source language"
 
 export const pluginOptionsSchema = z.object({
   enabled: z.boolean().optional(),
+  model: z.string().optional(),
+  variant: z.string().trim().min(1).optional(),
+  lang: z.string().trim().min(1).default("English"),
+  input: z.enum(["show original", "show translation", "show original + translation"]).default("show original"),
+  output: z.enum(["show original", "replace original", "append translation"]).default("show original"),
   small_model: z.string().optional(),
 })
 
@@ -27,6 +32,7 @@ const translationPartSchema = z.object({
 export type ModelReference = z.infer<typeof modelReferenceSchema>
 export type PluginOptions = z.infer<typeof pluginOptionsSchema>
 export type TranslationPart = z.infer<typeof translationPartSchema>
+export type TranslationDirection = "to-english" | "from-english"
 
 export function parseModelRef(value: string): ModelReference | undefined {
   const separator = value.indexOf("/")
@@ -45,9 +51,11 @@ export function isTranslatablePart(value: unknown): value is TranslationPart {
   return parsed.data.text.trim().length > 0
 }
 
-export function translationPrompt(text: string) {
+export function translationPrompt(text: string, direction: TranslationDirection = "to-english", language = "English") {
+  const target = direction === "to-english" ? "English" : language
+  const source = direction === "to-english" ? TRANSLATION_SOURCE : "English"
   return [
-    `Translate the following user message to ${TRANSLATION_TARGET}.`,
+    `Translate the following text from ${source} to ${target}.`,
     "Preserve meaning, formatting, Markdown, code, URLs, filenames, commands, and placeholders exactly.",
     "Return only the translation. Do not explain, summarize, quote, or add commentary.",
     "<user-message>",

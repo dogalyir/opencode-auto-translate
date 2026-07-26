@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { isTranslatablePart, parseModelRef, translationPrompt } from "../src/translation"
+import { isTranslatablePart, parseModelRef, pluginOptionsSchema, translationPrompt } from "../src/translation"
 
 test("parses model references with slash-containing model IDs", () => {
   expect(parseModelRef("openrouter/openai/gpt-4o-mini")).toEqual({
@@ -24,4 +24,25 @@ test("translation prompt requests output without commentary", () => {
   const prompt = translationPrompt("Hola **mundo**")
   expect(prompt).toContain("Return only the translation")
   expect(prompt).toContain("Hola **mundo**")
+})
+
+test("translation prompt supports translating the response back to the configured language", () => {
+  const prompt = translationPrompt("Hello **world**", "from-english", "Spanish")
+  expect(prompt).toContain("from English to Spanish")
+  expect(prompt).toContain("Hello **world**")
+})
+
+test("plugin options provide strict defaults and accept model display settings", () => {
+  expect(pluginOptionsSchema.parse({})).toMatchObject({
+    lang: "English",
+    input: "show original",
+    output: "show original",
+  })
+  expect(pluginOptionsSchema.parse({
+    model: "openai/gpt-5.4-mini",
+    variant: "minimal",
+    lang: "Spanish",
+    input: "show original + translation",
+    output: "append translation",
+  })).toMatchObject({ model: "openai/gpt-5.4-mini", variant: "minimal", lang: "Spanish" })
 })

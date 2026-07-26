@@ -1,12 +1,14 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginModule } from "@opencode-ai/plugin/tui"
 import { createSignal } from "solid-js"
-import { parseToggleCommand, TRANSLATION_EVENT } from "./translation"
+import { parseToggleCommand, pluginOptionsSchema, TRANSLATION_EVENT } from "./translation"
 
 const ID = "opencode-auto-translate"
 const KEY = `${ID}.enabled`
 
-const tui: TuiPlugin = async (api) => {
+const tui: TuiPlugin = async (api, options) => {
+  const parsedOptions = pluginOptionsSchema.safeParse(options)
+  const language = parsedOptions.success ? parsedOptions.data.lang : "English"
   const storedValue = api.kv.get<unknown>(KEY, false)
   const initialState = typeof storedValue === "boolean" ? storedValue : false
   const [isEnabled, setEnabled] = createSignal(initialState)
@@ -46,7 +48,7 @@ const tui: TuiPlugin = async (api) => {
 
   api.slots.register({
     slots: {
-      session_prompt_right: () => <text>{isEnabled() ? " [translate: on]" : " [translate: off]"}</text>,
+       session_prompt_right: () => <text>{isEnabled() ? ` [translate: on -> ${language}]` : " [translate: off]"}</text>,
     },
   })
 
