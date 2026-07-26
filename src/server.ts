@@ -187,4 +187,3 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
 }
 
 export default AutoTranslatePlugin
-export { AutoTranslatePlugin, extractTranslation, parsePluginOptions }

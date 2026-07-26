@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test"
 import { isTranslatablePart, parseModelRef, pluginOptionsSchema, translationPrompt } from "../src/translation"
 
+const serverModule = await import("../src/server")
+
+test("server entrypoint exports only the plugin factory", () => {
+  expect(Object.keys(serverModule)).toEqual(["default"])
+})
+
 test("parses model references with slash-containing model IDs", () => {
   expect(parseModelRef("openrouter/openai/gpt-4o-mini")).toEqual({
     providerID: "openrouter",
