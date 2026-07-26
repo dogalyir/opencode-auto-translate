@@ -3,10 +3,25 @@
   "version": "0.1.0",
   "description": "Translate user prompts to English before OpenCode sends them to the main model.",
   "license": "MIT",
+  "keywords": ["opencode", "opencode-plugin", "translation", "localization", "ai-agents"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dogalyir/opencode-auto-translate.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dogalyir/opencode-auto-translate/issues"
+  },
+  "homepage": "https://github.com/dogalyir/opencode-auto-translate#readme",
   "module": "./dist/server.js",
   "main": "./dist/server.js",
   "type": "module",
   "files": ["dist", "README.md", "LICENSE"],
+  "engines": {
+    "opencode": ">=1.18.5"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": "./dist/server.js",
     "./server": "./dist/server.js",
@@ -19,7 +34,9 @@
     "lint": "bunx oxlint src test",
     "check:duplicates": "bunx jscpd src test --threshold 0",
     "check:unused": "bunx knip",
-    "check:all": "bun run typecheck && bun test && bun run lint && bun run check:duplicates && bun run check:unused && bun run build",
+    "check:fallow": "fallow --production --ci --skip health",
+    "analyze:fallow": "fallow --production --skip dead-code,dupes; exit 0",
+    "check:all": "bun run typecheck && bun test && bun run lint && bun run check:duplicates && bun run check:unused && bun run check:fallow && bun run build",
     "prepare": "simple-git-hooks"
   },
   "devDependencies": {
@@ -28,6 +45,7 @@
     "@opentui/keymap": "^0.4.5",
     "@opentui/solid": "^0.4.5",
     "@types/bun": "latest",
+    "fallow": "^3.9.1",
     "jscpd": "^5.0.12",
     "knip": "^6.29.0",
     "lint-staged": "^17.2.0",
