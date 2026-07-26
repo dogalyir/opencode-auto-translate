@@ -1,9 +1,15 @@
 {
   "name": "opencode-auto-translate",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Translate user prompts to English before OpenCode sends them to the main model.",
   "license": "MIT",
-  "keywords": ["opencode", "opencode-plugin", "translation", "localization", "ai-agents"],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "translation",
+    "localization",
+    "ai-agents"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dogalyir/opencode-auto-translate.git"
@@ -15,7 +21,11 @@
   "module": "./dist/server.js",
   "main": "./dist/server.js",
   "type": "module",
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "opencode": ">=1.18.5"
   },
