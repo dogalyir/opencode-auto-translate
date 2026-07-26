@@ -35,7 +35,7 @@ Add the TUI entrypoint to `tui.json`:
 ```jsonc
 {
   "$schema": "https://opencode.ai/tui.json",
-  "plugin": ["opencode-auto-translate"]
+  "plugin": ["opencode-auto-translate/tui"]
 }
 ```
 
