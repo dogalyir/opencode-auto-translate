@@ -10,7 +10,7 @@ Configure an explicit `small_model`, because the plugin uses that exact OpenCode
 {
   "$schema": "https://opencode.ai/config.json",
   "small_model": "openai/gpt-4o-mini",
-  "plugin": ["opencode-auto-translate@0.1.11"],
+  "plugin": ["opencode-auto-translate@latest"],
 }
 ```
 
@@ -20,7 +20,7 @@ The model can instead be selected in plugin options. `model` takes precedence ov
 {
   "plugin": [
     [
-      "opencode-auto-translate@0.1.11",
+      "opencode-auto-translate@latest",
       {
         "model": "openai/gpt-5.4-mini",
         "variant": "minimal",
@@ -35,12 +35,12 @@ The model can instead be selected in plugin options. `model` takes precedence ov
 
 Input translation changes only the model-facing message, so the visible session history keeps the original text while the model receives English. The current OpenCode plugin API does not expose a hook for translating rendered assistant output after streaming.
 
-Add the TUI entrypoint to `tui.json`. Use the package root; OpenCode resolves `exports["./tui"]` automatically:
+Add the package to `tui.json` using the same package name and version:
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/tui.json",
-  "plugin": ["opencode-auto-translate@0.1.11"],
+  "plugin": ["opencode-auto-translate@latest"],
 }
 ```
 
