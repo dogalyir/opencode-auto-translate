@@ -1,0 +1,9 @@
+{
+  "$schema": "https://oxc.rs/schema/oxlint.json",
+  "rules": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "warn",
+    "style": "warn"
+  }
+}
