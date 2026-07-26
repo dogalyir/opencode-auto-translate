@@ -43,7 +43,6 @@ const tui: TuiPlugin = async (api, options) => {
   };
 
   api.keymap.registerLayer({
-    mode: "base",
     commands: [
       {
         name: `${ID}.toggle`,
@@ -55,6 +54,10 @@ const tui: TuiPlugin = async (api, options) => {
         run: () => publish(!isEnabled()),
       },
     ],
+  })
+
+  api.keymap.registerLayer({
+    mode: "base",
     bindings: [
       {
         key: "ctrl+shift+t",
