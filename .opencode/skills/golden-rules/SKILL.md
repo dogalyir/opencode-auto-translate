@@ -8,11 +8,13 @@ description: Apply the project's strict coding, validation, typing, control-flow
 **Apply these rules to the entire project, without exceptions.**
 
 **General Objective**
+
 - **Analyze the entire project** to identify bad practices and optimize quality, readability, maintainability, scalability, and consistency.
 - **Optimize all code** professionally and sustainably.
 - **Separate, simplify, and improve** code into small, cohesive, and scalable files.
 
 #### 1) Strict, Reusable, and Inferred Typing
+
 - Reuse existing interfaces, types, and contracts before creating new ones.
 - Prioritize automatic type inference from sources of truth (`zod`, `drizzle-orm`, domain schemas).
 - Avoid inline repetition of `| null` and `| undefined`; use shared utility types.
@@ -28,6 +30,7 @@ description: Apply the project's strict coding, validation, typing, control-flow
   - **Incorrect:** `waId?: MaybeUndefined<string>` (Redundant).
 
 #### 2) Forbidden Forced Casting (`as`)
+
 - **Do not use `as`** to "force" types.
 - **Strictly prohibited:**
   - `as unknown as X`
@@ -36,6 +39,7 @@ description: Apply the project's strict coding, validation, typing, control-flow
 - Instead of casting, fix the typing at the origin using **Zod schemas**. Always validate external data (API responses, inputs) using Zod to ensure type safety and domain consistency.
 
 #### 3) Explicit Control Flow (Early / Easy Return)
+
 - Prefer **early return / easy return** patterns everywhere. Validate first, exit immediately, and keep the happy path clean.
 - Analyze every conditional deliberately. Do not let uncertain data flow deeper into the function.
 - Avoid abusing optional chaining (`obj?.a?.b?.c`) when it hides domain uncertainty.
@@ -56,6 +60,7 @@ description: Apply the project's strict coding, validation, typing, control-flow
 - Be concrete and strict in validation and error branches.
 
 #### 4) Validation and Robustness
+
 - Use `zod` extensively where no better alternative exists: validation of inputs/outputs and data normalization.
 - Reuse schemas and derived types (`z.infer`) to maintain end-to-end consistency.
 - Create reusable types for function returns (e.g., `Result`, `Success`) to avoid ambiguous return structures like `return waId !== undefined ? { ok: true, waId } : { ok: true }`.
@@ -68,6 +73,7 @@ description: Apply the project's strict coding, validation, typing, control-flow
 - Avoid returning inconsistent object shapes from the same function. Use discriminated unions for success/error flows.
 
 #### 5) Function Design and Readability
+
 - Keep functions small, focused, and named by behavior.
 - Prefer one clear responsibility per function. Extract only when it improves reuse, readability, or testability.
 - Keep the happy path obvious: validate inputs first, return early on failure, then execute the core logic.
@@ -78,6 +84,7 @@ description: Apply the project's strict coding, validation, typing, control-flow
 - Prefer readable, boring code over clever abstractions.
 
 #### 6) Constant Reuse and Structure
+
 - Reuse existing constants (do not duplicate magic literals).
 - Centralize constants shared by domain.
 - Keep modules small, focused, and decoupled to facilitate project evolution.
@@ -86,6 +93,7 @@ description: Apply the project's strict coding, validation, typing, control-flow
 - Keep file boundaries intentional: domain logic, infrastructure, schemas, constants, and types should not be mixed casually.
 
 #### 7) Async, Promises, and Side Effects
+
 - Always handle promises explicitly. Do not leave floating promises unless intentionally marked and justified.
 - Avoid unnecessary `await` when returning a promise directly, unless needed for `try/catch` or cleanup flow.
 - Keep async control flow linear and readable. Avoid mixing callbacks, `.then()`, and `async/await` in the same flow without a clear reason.
@@ -94,6 +102,7 @@ description: Apply the project's strict coding, validation, typing, control-flow
 - Prefer typed results for operations that can fail as part of normal domain flow.
 
 #### 8) Collections and Data Access
+
 - Validate arrays before indexing.
   - **Incorrect:** `const first = items?.[0];`
   - **Correct:** `if (items.length === 0) return ...; const first = items[0];`
@@ -103,6 +112,7 @@ description: Apply the project's strict coding, validation, typing, control-flow
 - Prefer immutable transformations for domain data.
 
 #### 9) Naming and Domain Clarity
+
 - Use domain-specific names instead of generic names like `data`, `item`, `payload`, or `result` when the meaning is known.
 - Boolean names must read clearly (`isActive`, `hasPermission`, `shouldRetry`).
 - Avoid abbreviations unless they are established domain language.
@@ -110,6 +120,7 @@ description: Apply the project's strict coding, validation, typing, control-flow
 - Do not hide important domain decisions inside generic helpers.
 
 #### 10) Imports, Exports, and Dependencies
+
 - Reuse existing modules before adding new dependencies.
 - Keep imports intentional and minimal.
 - Avoid circular dependencies and broad barrel exports that hide coupling.
@@ -117,6 +128,7 @@ description: Apply the project's strict coding, validation, typing, control-flow
 - Do not introduce a dependency for logic that can be implemented clearly with existing project tools.
 
 #### 11) Tests and Verification Mindset
+
 - When changing behavior, add or update tests where the project already has a testing pattern.
 - Cover required validation branches, early returns, edge cases, and error states.
 - Do not only test the happy path.
@@ -124,6 +136,7 @@ description: Apply the project's strict coding, validation, typing, control-flow
 - Ensure TypeScript catches invalid states instead of relying only on runtime tests.
 
 **Final Acceptance Criteria**
+
 - All code must pass `bun check:all` (all scripts) without errors.
 - No forced casts (`as`) remain unless there is a rare, justified, and unavoidable reason.
 - No optional chaining remains where explicit validation is required.
