@@ -80,3 +80,49 @@ test("plugin options provide strict defaults and accept model display settings",
     lang: "Spanish",
   });
 });
+
+test("plugin replaces the original message with the translation", async () => {
+  const createPlugin = Object.getOwnPropertyDescriptor(serverModule, "default")?.value;
+  if (typeof createPlugin !== "function") throw new Error("Missing plugin factory");
+
+  const translationRequest = async () => ({
+    data: { parts: [{ type: "text", text: "hello" }] },
+  });
+  const client = {
+    app: { log: async () => ({}) },
+    config: { get: async () => ({ data: { small_model: "openai/gpt-5.6-luna" } }) },
+    session: {
+      create: async () => ({ data: { id: "translation-session" } }),
+      prompt: translationRequest,
+      delete: async () => ({}),
+    },
+  };
+  const plugin = await Reflect.apply(createPlugin, undefined, [
+    { client, directory: "/tmp" },
+  ]);
+  if (plugin === null || (typeof plugin !== "object" && typeof plugin !== "function"))
+    throw new Error("Invalid plugin hooks");
+  const event = Reflect.get(plugin, "event");
+  const transform = Reflect.get(plugin, "experimental.chat.messages.transform");
+  if (typeof event !== "function" || typeof transform !== "function")
+    throw new Error("Missing plugin hooks");
+
+  await Reflect.apply(event, plugin, [{
+    event: {
+      type: "tui.command.execute",
+      properties: { command: "opencode-auto-translate.toggle:on" },
+    },
+  }]);
+
+  const output = {
+    messages: [
+      {
+        info: { role: "user", sessionID: "user-session" },
+        parts: [{ id: "part", type: "text", text: "hola" }],
+      },
+    ],
+  };
+  await Reflect.apply(transform, plugin, [{}, output]);
+
+  expect(output.messages[0]?.parts[0]?.text).toBe("hello");
+});

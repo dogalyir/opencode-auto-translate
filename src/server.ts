@@ -45,9 +45,8 @@ function extractTranslation(value: unknown): string | undefined {
   return cleaned.length > 0 ? cleaned : undefined;
 }
 
-function parseMessages(value: unknown) {
-  const parsed = messagesSchema.safeParse(value);
-  return parsed.success ? parsed.data : undefined;
+function isMessages(value: unknown): value is z.infer<typeof messagesSchema> {
+  return messagesSchema.safeParse(value).success;
 }
 
 const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
@@ -226,9 +225,8 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
         );
         return;
       }
-      const messages = parseMessages(output.messages);
-      if (messages === undefined) return;
-      for (const message of messages) {
+      if (!isMessages(output.messages)) return;
+      for (const message of output.messages) {
         if (
           message.info.role !== "user" ||
           internalSessions.has(message.info.sessionID)
