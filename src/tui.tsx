@@ -51,7 +51,7 @@ const tui: TuiPlugin = async (api, options) => {
 
   api.slots.register({
     slots: {
-       session_prompt_right: () => <text>{isEnabled() ? ` [translate: on -> ${language}]` : " [translate: off]"}</text>,
+      session_prompt_right: () => <text>{isEnabled() ? ` [translate: on -> ${language}]` : " [translate: off]"}</text>,
     },
   })
 
