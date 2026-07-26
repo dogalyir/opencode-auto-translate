@@ -14,6 +14,22 @@ Configure an explicit `small_model`, because the plugin uses that exact OpenCode
 }
 ```
 
+The model can instead be selected in plugin options. `variant` is passed to the translation request, and `lang` is the language intended for translated responses:
+
+```jsonc
+{
+  "plugin": [["opencode-auto-translate", {
+    "model": "openai/gpt-5.4-mini",
+    "variant": "minimal",
+    "lang": "Spanish",
+    "input": "show original + translation",
+    "output": "append translation"
+  }]]
+}
+```
+
+Supported output modes are `show original`, `replace original`, and `append translation`. Input translation currently changes only the model-facing message, so the main session counts the translated English text rather than both the original and translation. The current OpenCode plugin API does not expose a hook for replacing rendered assistant output after streaming; response display modes will become active when that API is available.
+
 Add the TUI entrypoint to `tui.json`:
 
 ```jsonc
