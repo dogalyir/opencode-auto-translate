@@ -10,7 +10,7 @@ Configure an explicit `small_model`, because the plugin uses that exact OpenCode
 {
   "$schema": "https://opencode.ai/config.json",
   "small_model": "openai/gpt-4o-mini",
-  "plugin": ["opencode-auto-translate"]
+  "plugin": ["opencode-auto-translate"],
 }
 ```
 
@@ -18,13 +18,18 @@ The model can instead be selected in plugin options. `variant` is passed to the 
 
 ```jsonc
 {
-  "plugin": [["opencode-auto-translate", {
-    "model": "openai/gpt-5.4-mini",
-    "variant": "minimal",
-    "lang": "Spanish",
-    "input": "show original + translation",
-    "output": "append translation"
-  }]]
+  "plugin": [
+    [
+      "opencode-auto-translate",
+      {
+        "model": "openai/gpt-5.4-mini",
+        "variant": "minimal",
+        "lang": "Spanish",
+        "input": "show original + translation",
+        "output": "append translation",
+      },
+    ],
+  ],
 }
 ```
 
@@ -35,7 +40,7 @@ Add the TUI entrypoint to `tui.json`:
 ```jsonc
 {
   "$schema": "https://opencode.ai/tui.json",
-  "plugin": ["opencode-auto-translate/tui"]
+  "plugin": ["opencode-auto-translate/tui"],
 }
 ```
 
