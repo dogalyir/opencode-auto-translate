@@ -5,7 +5,6 @@
     "": {
       "name": "opencode-auto-translate",
       "dependencies": {
-        "solid-js": "^1.9.14",
         "zod": "^4.4.3",
       },
       "devDependencies": {
@@ -20,6 +19,7 @@
         "lint-staged": "^17.2.0",
         "oxlint": "^1.75.0",
         "simple-git-hooks": "^2.13.1",
+        "solid-js": "1.9.12",
         "typescript": "^7.0.2",
       },
       "peerDependencies": {
@@ -27,6 +27,7 @@
         "@opentui/core": "^0.4.5",
         "@opentui/keymap": "^0.4.5",
         "@opentui/solid": "^0.4.5",
+        "solid-js": "1.9.12",
       },
     },
   },
@@ -515,7 +516,7 @@
 
     "smol-toml": ["smol-toml@1.7.0", "", {}, "sha512-aqVvWoyO21L23mb+drl4RmMXbf6N7FdHjAhTRA9ZBL7apWBgfWC16KjrASI+1p9GAroljyMHj6fK67i0UiTNvQ=="],
 
-    "solid-js": ["solid-js@1.9.14", "", { "dependencies": { "csstype": "^3.1.0", "seroval": "~1.5.4", "seroval-plugins": "~1.5.4" } }, "sha512-sAEXC0Kk0S1EDg+8ysEWJDbYhA3RRoEjwuySUGlKIemeo0I5YZfOyumNjNs9Sv3y2nmhD+0rW66ag2HsMuQiGQ=="],
+    "solid-js": ["solid-js@1.9.12", "", { "dependencies": { "csstype": "^3.1.0", "seroval": "~1.5.0", "seroval-plugins": "~1.5.0" } }, "sha512-QzKaSJq2/iDrWR1As6MHZQ8fQkdOBf8GReYb7L5iKwMGceg7HxDcaOHk0at66tNgn9U2U7dXo8ZZpLIAmGMzgw=="],
 
     "string-argv": ["string-argv@0.3.2", "", {}, "sha512-aqD2Q0144Z+/RqG52NeHEkZauTAUWJO8c6yTftGJKO3Tja5tUgIfmIl6kExvhtxSDP7fXB6DvzkfMpCd/F3G+Q=="],
 

@@ -38,7 +38,7 @@
     "./tui": "./dist/tui.js"
   },
   "scripts": {
-    "build": "bun build src/server.ts src/tui.tsx --outdir dist --target bun --external '@opentui/*'",
+    "build": "bun build src/server.ts src/tui.tsx --outdir dist --target bun --external '@opentui/*' --external 'solid-js'",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "lint": "bunx oxlint src test",
@@ -61,16 +61,17 @@
     "lint-staged": "^17.2.0",
     "oxlint": "^1.75.0",
     "simple-git-hooks": "^2.13.1",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "solid-js": "1.9.12"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": "^1.18.5",
     "@opentui/core": "^0.4.5",
     "@opentui/keymap": "^0.4.5",
-    "@opentui/solid": "^0.4.5"
+    "@opentui/solid": "^0.4.5",
+    "solid-js": "1.9.12"
   },
   "dependencies": {
-    "solid-js": "^1.9.14",
     "zod": "^4.4.3"
   },
   "lint-staged": {
