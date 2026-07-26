@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginModule } from "@opencode-ai/plugin/tui"
 import { createSignal } from "solid-js"
-import { parseToggleCommand, pluginOptionsSchema, TRANSLATION_EVENT } from "./translation"
+import { pluginOptionsSchema, TRANSLATION_EVENT } from "./translation"
 
 const ID = "opencode-auto-translate"
 const KEY = `${ID}.enabled`
@@ -20,14 +20,17 @@ const tui: TuiPlugin = async (api, options) => {
       message: enabled ? "Enabled" : "Disabled",
       variant: enabled ? "success" : "info",
     })
-    const response = await api.client.tui.publish({
-      body: { type: "tui.command.execute", properties: { command: `${TRANSLATION_EVENT}:${enabled ? "on" : "off"}` } },
-    })
-    if (response.error) {
-      setEnabled(!enabled)
-      api.kv.set(KEY, !enabled)
-      api.ui.toast({ title: "Auto-translation", message: "Could not update server state", variant: "error" })
+    try {
+      const response = await api.client.tui.publish({
+        body: { type: "tui.command.execute", properties: { command: `${TRANSLATION_EVENT}:${enabled ? "on" : "off"}` } },
+      })
+      if (!response.error) return
+    } catch {
+      // Restore the local state when the server cannot receive the toggle.
     }
+    setEnabled(!enabled)
+    api.kv.set(KEY, !enabled)
+    api.ui.toast({ title: "Auto-translation", message: "Could not update server state", variant: "error" })
   }
 
   api.keymap.registerLayer({
@@ -52,8 +55,6 @@ const tui: TuiPlugin = async (api, options) => {
     },
   })
 
-  const initialCommand = `${TRANSLATION_EVENT}:${isEnabled() ? "on" : "off"}`
-  if (parseToggleCommand(initialCommand) !== undefined) await publish(isEnabled())
 }
 
 const plugin: TuiPluginModule & { id: string } = { id: ID, tui }
