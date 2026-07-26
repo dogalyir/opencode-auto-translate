@@ -1,5 +1,5 @@
-import type { Plugin } from "@opencode-ai/plugin"
-import { z } from "zod"
+import type { Plugin } from "@opencode-ai/plugin";
+import { z } from "zod";
 import {
   cleanTranslation,
   isTranslatablePart,
@@ -12,51 +12,60 @@ import {
   translationPrompt,
   type ModelReference,
   type PluginOptions,
-} from "./translation"
+} from "./translation";
 
-const sessionIdSchema = z.string().min(1)
-const textResponseSchema = z.object({ type: z.literal("text"), text: z.string() })
-const translationResponseSchema = z.object({ parts: z.array(z.unknown()) })
+const sessionIdSchema = z.string().min(1);
+const textResponseSchema = z.object({
+  type: z.literal("text"),
+  text: z.string(),
+});
+const translationResponseSchema = z.object({ parts: z.array(z.unknown()) });
 const messagesSchema = z.array(
   z.object({
     info: z.object({ role: z.string(), sessionID: z.string().min(1) }),
     parts: z.array(z.record(z.string(), z.unknown())),
   }),
-)
+);
 
 function parsePluginOptions(options: unknown): PluginOptions {
-  const parsed = pluginOptionsSchema.safeParse(options)
-  if (parsed.success) return parsed.data
-  return pluginOptionsSchema.parse({})
+  const parsed = pluginOptionsSchema.safeParse(options);
+  if (parsed.success) return parsed.data;
+  return pluginOptionsSchema.parse({});
 }
 
 function extractTranslation(value: unknown): string | undefined {
-  const parsed = translationResponseSchema.safeParse(value)
-  if (!parsed.success) return undefined
+  const parsed = translationResponseSchema.safeParse(value);
+  if (!parsed.success) return undefined;
   const textParts = parsed.data.parts.flatMap((part) => {
-    const textPart = textResponseSchema.safeParse(part)
-    return textPart.success ? [textPart.data.text] : []
-  })
-  if (textParts.length === 0) return undefined
-  const cleaned = cleanTranslation(textParts.join("\n"))
-  return cleaned.length > 0 ? cleaned : undefined
+    const textPart = textResponseSchema.safeParse(part);
+    return textPart.success ? [textPart.data.text] : [];
+  });
+  if (textParts.length === 0) return undefined;
+  const cleaned = cleanTranslation(textParts.join("\n"));
+  return cleaned.length > 0 ? cleaned : undefined;
 }
 
 function parseMessages(value: unknown) {
-  const parsed = messagesSchema.safeParse(value)
-  return parsed.success ? parsed.data : undefined
+  const parsed = messagesSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
 }
 
 const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
-  const pluginOptions = parsePluginOptions(options)
-  let enabled = pluginOptions.enabled === true
-  const cache = new Map<string, string>()
-  const inFlight = new Map<string, Promise<string | undefined>>()
-  const internalSessions = new Set<string>()
+  const pluginOptions = parsePluginOptions(options);
+  let enabled = pluginOptions.enabled === true;
+  const cache = new Map<string, string>();
+  const inFlight = new Map<string, Promise<string | undefined>>();
+  const internalSessions = new Set<string>();
 
-  async function log(level: "warn" | "error", message: string, extra?: Record<string, unknown>) {
+  async function log(
+    level: "warn" | "error",
+    message: string,
+    extra?: Record<string, unknown>,
+  ) {
     try {
-      await client.app.log({ body: { service: TRANSLATION_SERVICE, level, message, extra } })
+      await client.app.log({
+        body: { service: TRANSLATION_SERVICE, level, message, extra },
+      });
     } catch {
       // Logging must not break the fail-open translation path.
     }
@@ -64,126 +73,176 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
 
   async function deleteSession(sessionID: string) {
     try {
-      const response = await client.session.delete({ path: { id: sessionID }, query: { directory } })
-      if (response.error) await log("warn", "Failed to delete temporary translation session", { sessionID })
+      const response = await client.session.delete({
+        path: { id: sessionID },
+        query: { directory },
+      });
+      if (response.error)
+        await log("warn", "Failed to delete temporary translation session", {
+          sessionID,
+        });
     } catch (error) {
-      await log("warn", "Failed to delete temporary translation session", { sessionID, error: String(error) })
+      await log("warn", "Failed to delete temporary translation session", {
+        sessionID,
+        error: String(error),
+      });
     }
   }
 
-  async function translateText(text: string, model: ModelReference): Promise<string | undefined> {
-    let sessionResponse
+  async function translateText(
+    text: string,
+    model: ModelReference,
+  ): Promise<string | undefined> {
+    let sessionResponse;
     try {
-      sessionResponse = await client.session.create({ query: { directory }, body: { title: "Auto-translate" } })
+      sessionResponse = await client.session.create({
+        query: { directory },
+        body: { title: "Auto-translate" },
+      });
     } catch (error) {
-      await log("error", "Failed to create translation session", { error: String(error) })
-      return undefined
+      await log("error", "Failed to create translation session", {
+        error: String(error),
+      });
+      return undefined;
     }
     if (sessionResponse.error) {
-      await log("error", "Failed to create translation session", { error: String(sessionResponse.error) })
-      return undefined
+      await log("error", "Failed to create translation session", {
+        error: String(sessionResponse.error),
+      });
+      return undefined;
     }
-    const sessionData = sessionResponse.data
+    const sessionData = sessionResponse.data;
     if (sessionData === undefined) {
-      await log("error", "Translation session response did not include data")
-      return undefined
+      await log("error", "Translation session response did not include data");
+      return undefined;
     }
-    const sessionID = sessionIdSchema.safeParse(sessionData.id)
+    const sessionID = sessionIdSchema.safeParse(sessionData.id);
     if (!sessionID.success) {
-      await log("error", "Translation session did not return a valid ID")
-      return undefined
+      await log("error", "Translation session did not return a valid ID");
+      return undefined;
     }
-    internalSessions.add(sessionID.data)
+    internalSessions.add(sessionID.data);
     try {
-      let response
+      let response;
       try {
         response = await client.session.prompt({
           path: { id: sessionID.data },
           query: { directory },
           body: {
             model,
-            ...(pluginOptions.variant === undefined ? {} : { variant: pluginOptions.variant }),
+            ...(pluginOptions.variant === undefined
+              ? {}
+              : { variant: pluginOptions.variant }),
             agent: TRANSLATION_AGENT,
             system: TRANSLATION_MODEL_INSTRUCTION,
             tools: {},
             parts: [{ type: "text", text: translationPrompt(text) }],
           },
-        })
+        });
       } catch (error) {
-        await log("error", "Translation request failed", { error: String(error) })
-        return undefined
+        await log("error", "Translation request failed", {
+          error: String(error),
+        });
+        return undefined;
       }
       if (response.error) {
-        await log("error", "Translation request failed", { error: String(response.error) })
-        return undefined
+        await log("error", "Translation request failed", {
+          error: String(response.error),
+        });
+        return undefined;
       }
-      return extractTranslation(response.data)
+      return extractTranslation(response.data);
     } finally {
-      internalSessions.delete(sessionID.data)
-      await deleteSession(sessionID.data)
+      internalSessions.delete(sessionID.data);
+      await deleteSession(sessionID.data);
     }
   }
 
-  async function getTranslation(text: string, model: ModelReference, key: string) {
-    const cached = cache.get(key)
-    if (cached !== undefined) return cached
-    const pending = inFlight.get(key)
-    if (pending !== undefined) return pending
-    const request = translateText(text, model)
-    inFlight.set(key, request)
-    let translated: string | undefined
+  async function getTranslation(
+    text: string,
+    model: ModelReference,
+    key: string,
+  ) {
+    const cached = cache.get(key);
+    if (cached !== undefined) return cached;
+    const pending = inFlight.get(key);
+    if (pending !== undefined) return pending;
+    const request = translateText(text, model);
+    inFlight.set(key, request);
+    let translated: string | undefined;
     try {
-      translated = await request
+      translated = await request;
     } finally {
-      inFlight.delete(key)
+      inFlight.delete(key);
     }
-    if (translated !== undefined) cache.set(key, translated)
-    return translated
+    if (translated !== undefined) cache.set(key, translated);
+    return translated;
   }
 
   return {
     event: async ({ event }) => {
-      if (event.type !== "tui.command.execute") return
-      const command = event.properties.command
-      if (typeof command !== "string") return
-      const nextState = parseToggleCommand(command)
-      if (nextState === undefined) return
-      enabled = nextState
+      if (event.type !== "tui.command.execute") return;
+      const command = event.properties.command;
+      if (typeof command !== "string") return;
+      const nextState = parseToggleCommand(command);
+      if (nextState === undefined) return;
+      enabled = nextState;
     },
     "experimental.chat.messages.transform": async (_input, output) => {
-      if (!enabled) return
-      const configResponse = await client.config.get({ query: { directory } })
+      if (!enabled) return;
+      const configResponse = await client.config.get({ query: { directory } });
       if (configResponse.error) {
-        await log("warn", "Could not read OpenCode configuration", { error: String(configResponse.error) })
-        return
+        await log("warn", "Could not read OpenCode configuration", {
+          error: String(configResponse.error),
+        });
+        return;
       }
-      const configData = configResponse.data
+      const configData = configResponse.data;
       if (configData === undefined) {
-        await log("warn", "OpenCode configuration response did not include data")
-        return
+        await log(
+          "warn",
+          "OpenCode configuration response did not include data",
+        );
+        return;
       }
-      const configuredModel = z.string().safeParse(configData.small_model)
-      const configuredReference = configuredModel.success ? parseModelRef(configuredModel.data) : undefined
-       const configuredPluginModel = pluginOptions.model === undefined ? undefined : parseModelRef(pluginOptions.model)
-       const configuredOptionModel = pluginOptions.small_model === undefined ? undefined : parseModelRef(pluginOptions.small_model)
-       const model = configuredPluginModel ?? configuredReference ?? configuredOptionModel
+      const configuredModel = z.string().safeParse(configData.small_model);
+      const configuredReference = configuredModel.success
+        ? parseModelRef(configuredModel.data)
+        : undefined;
+      const configuredPluginModel =
+        pluginOptions.model === undefined
+          ? undefined
+          : parseModelRef(pluginOptions.model);
+      const configuredOptionModel =
+        pluginOptions.small_model === undefined
+          ? undefined
+          : parseModelRef(pluginOptions.small_model);
+      const model =
+        configuredPluginModel ?? configuredReference ?? configuredOptionModel;
       if (model === undefined) {
-        await log("warn", "Translation is enabled but small_model is not configured")
-        return
+        await log(
+          "warn",
+          "Translation is enabled but small_model is not configured",
+        );
+        return;
       }
-      const messages = parseMessages(output.messages)
-      if (messages === undefined) return
+      const messages = parseMessages(output.messages);
+      if (messages === undefined) return;
       for (const message of messages) {
-        if (message.info.role !== "user" || internalSessions.has(message.info.sessionID)) continue
+        if (
+          message.info.role !== "user" ||
+          internalSessions.has(message.info.sessionID)
+        )
+          continue;
         for (const part of message.parts) {
-          if (!isTranslatablePart(part)) continue
-          const key = `${model.providerID}/${model.modelID}:${part.id}:${part.text}`
-          const translated = await getTranslation(part.text, model, key)
-          if (translated !== undefined) part.text = translated
+          if (!isTranslatablePart(part)) continue;
+          const key = `${model.providerID}/${model.modelID}:${part.id}:${part.text}`;
+          const translated = await getTranslation(part.text, model, key);
+          if (translated !== undefined) part.text = translated;
         }
       }
     },
-  }
-}
+  };
+};
 
-export default AutoTranslatePlugin
+export default AutoTranslatePlugin;
