@@ -2,6 +2,7 @@ import type { Plugin } from "@opencode-ai/plugin";
 import { z } from "zod";
 import {
   cleanTranslation,
+  displayTranslation,
   isTranslatablePart,
   parseModelRef,
   parseToggleCommand,
@@ -91,6 +92,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
   async function translateText(
     text: string,
     model: ModelReference,
+    direction: "to-english" | "from-english" = "to-english",
   ): Promise<string | undefined> {
     let sessionResponse;
     try {
@@ -135,7 +137,10 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
             agent: TRANSLATION_AGENT,
             system: TRANSLATION_MODEL_INSTRUCTION,
             tools: {},
-            parts: [{ type: "text", text: translationPrompt(text) }],
+            parts: [{
+              type: "text",
+              text: translationPrompt(text, direction, pluginOptions.lang),
+            }],
           },
         });
       } catch (error) {
@@ -161,12 +166,13 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     text: string,
     model: ModelReference,
     key: string,
+    direction: "to-english" | "from-english" = "to-english",
   ) {
     const cached = cache.get(key);
     if (cached !== undefined) return cached;
     const pending = inFlight.get(key);
     if (pending !== undefined) return pending;
-    const request = translateText(text, model);
+    const request = translateText(text, model, direction);
     inFlight.set(key, request);
     let translated: string | undefined;
     try {
@@ -176,6 +182,21 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     }
     if (translated !== undefined) cache.set(key, translated);
     return translated;
+  }
+
+  async function resolveModel(): Promise<ModelReference | undefined> {
+    const response = await client.config.get({ query: { directory } });
+    if (response.error || response.data === undefined) return undefined;
+    const configured = z.string().safeParse(response.data.small_model);
+    return (
+      (pluginOptions.model === undefined
+        ? undefined
+        : parseModelRef(pluginOptions.model)) ??
+      (configured.success ? parseModelRef(configured.data) : undefined) ??
+      (pluginOptions.small_model === undefined
+        ? undefined
+        : parseModelRef(pluginOptions.small_model))
+    );
   }
 
   return {
@@ -239,6 +260,20 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
           if (translated !== undefined) part.text = translated;
         }
       }
+    },
+    "experimental.text.complete": async (input, output) => {
+      if (!enabled || internalSessions.has(input.sessionID)) return;
+      if (pluginOptions.output === "show original") return;
+      const model = await resolveModel();
+      if (model === undefined || output.text.trim().length === 0) return;
+      const translated = await getTranslation(
+        output.text,
+        model,
+        `${model.providerID}/${model.modelID}:response:${input.partID}:${output.text}`,
+        "from-english",
+      );
+      if (translated !== undefined)
+        output.text = displayTranslation(output.text, translated, pluginOptions.output);
     },
   };
 };

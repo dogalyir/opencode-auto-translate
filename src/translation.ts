@@ -4,7 +4,7 @@ export const TRANSLATION_EVENT = "opencode-auto-translate.toggle";
 export const TRANSLATION_SERVICE = "opencode-auto-translate";
 export const TRANSLATION_AGENT = "general";
 export const TRANSLATION_MODEL_INSTRUCTION =
-  "You are a precise translation engine. Translate user text to English only.";
+  "You are a precise translation engine. Translate text only.";
 const TRANSLATION_SOURCE = "the source language";
 
 export const pluginOptionsSchema = z.object({
@@ -16,7 +16,7 @@ export const pluginOptionsSchema = z.object({
     .enum(["show original", "show translation", "show original + translation"])
     .default("show original"),
   output: z
-    .enum(["show original", "replace original", "append translation"])
+    .enum(["show original", "show translation", "show original + translation"])
     .default("show original"),
   small_model: z.string().optional(),
 });
@@ -80,6 +80,16 @@ export function cleanTranslation(text: string): string {
     .replace(/\n?```\s*$/i, "")
     .trim();
   return cleaned;
+}
+
+export function displayTranslation(
+  original: string,
+  translated: string,
+  mode: PluginOptions["output"],
+): string {
+  if (mode === "show original") return original;
+  if (mode === "show translation") return `${original}\n\n${translated}`;
+  return `${original}\n\n[Translation]\n${translated}`;
 }
 
 export function parseToggleCommand(command: string): boolean | undefined {

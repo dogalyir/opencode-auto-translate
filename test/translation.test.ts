@@ -4,6 +4,7 @@ import {
   parseModelRef,
   pluginOptionsSchema,
   translationPrompt,
+  displayTranslation,
 } from "../src/translation";
 
 const serverModule = await import("../src/server");
@@ -60,6 +61,12 @@ test("translation prompt supports translating the response back to the configure
   expect(prompt).toContain("Hello **world**");
 });
 
+test("display modes preserve English context", () => {
+  expect(displayTranslation("Hello", "Hola", "show original")).toBe("Hello");
+  expect(displayTranslation("Hello", "Hola", "show translation")).toBe("Hello\n\nHola");
+  expect(displayTranslation("Hello", "Hola", "show original + translation")).toBe("Hello\n\n[Translation]\nHola");
+});
+
 test("plugin options provide strict defaults and accept model display settings", () => {
   expect(pluginOptionsSchema.parse({})).toMatchObject({
     lang: "English",
@@ -72,7 +79,7 @@ test("plugin options provide strict defaults and accept model display settings",
       variant: "minimal",
       lang: "Spanish",
       input: "show original + translation",
-      output: "append translation",
+      output: "show original + translation",
     }),
   ).toMatchObject({
     model: "openai/gpt-5.4-mini",
