@@ -133,3 +133,21 @@ test("plugin replaces the original message with the translation", async () => {
 
   expect(output.messages[0]?.parts[0]?.text).toBe("hello");
 });
+
+test("system transform localizes prose without localizing tools", async () => {
+  const createPlugin = Object.getOwnPropertyDescriptor(serverModule, "default")?.value;
+  if (typeof createPlugin !== "function") throw new Error("Missing plugin factory");
+  const plugin = await Reflect.apply(createPlugin, undefined, [
+    { client: { app: { log: async () => ({}) } }, directory: "/tmp" },
+    { enabled: true, lang: "Spanish" },
+  ]);
+  if (plugin === null || (typeof plugin !== "object" && typeof plugin !== "function"))
+    throw new Error("Invalid plugin hooks");
+  const transform = Reflect.get(plugin, "experimental.chat.system.transform");
+  if (typeof transform !== "function") throw new Error("Missing system transform");
+  const output = { system: [] as string[] };
+  await Reflect.apply(transform, plugin, [{ model: {} }, output]);
+  expect(output.system[0]).toContain("assistant prose in English");
+  expect(output.system[0]).not.toContain("user-facing prose in Spanish");
+  expect(output.system[0]).toContain("tool outputs unchanged");
+});

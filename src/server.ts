@@ -275,6 +275,16 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
       if (translated !== undefined)
         output.text = displayTranslation(output.text, translated, pluginOptions.output);
     },
+    "experimental.chat.system.transform": async (_input, output) => {
+      if (!enabled) return;
+      output.system.push(
+        [
+          "Write all assistant prose in English. The translation plugin renders it in the user's configured language.",
+          "Keep tool names, tool arguments, commands, paths, URLs, code, diffs, and tool outputs unchanged.",
+          "Native question prompts may remain English; preserve their exact meaning and answers.",
+        ].join(" "),
+      );
+    },
   };
 };
 
