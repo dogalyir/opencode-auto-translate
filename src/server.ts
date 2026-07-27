@@ -56,6 +56,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
   const cache = new Map<string, string>();
   const inFlight = new Map<string, Promise<string | undefined>>();
   const internalSessions = new Set<string>();
+  const translatedParts = new Set<string>();
 
   async function log(
     level: "warn" | "error",
@@ -264,6 +265,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     "experimental.text.complete": async (input, output) => {
       if (!enabled || internalSessions.has(input.sessionID)) return;
       if (pluginOptions.output === "show original") return;
+      if (translatedParts.has(input.partID)) return;
       const model = await resolveModel();
       if (model === undefined || output.text.trim().length === 0) return;
       const translated = await getTranslation(
@@ -272,8 +274,9 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
         `${model.providerID}/${model.modelID}:response:${input.partID}:${output.text}`,
         "from-english",
       );
-      if (translated !== undefined)
-        output.text = displayTranslation(output.text, translated, pluginOptions.output);
+      if (translated === undefined) return;
+      output.text = displayTranslation(output.text, translated, pluginOptions.output);
+      translatedParts.add(input.partID);
     },
     "experimental.chat.system.transform": async (_input, output) => {
       if (!enabled) return;
