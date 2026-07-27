@@ -1,0 +1,13 @@
+name: Project checks
+description: Run the repository verification gate
+runs:
+  using: composite
+  steps:
+    - run: bun install --frozen-lockfile
+      shell: bash
+    - run: bun run check:all
+      shell: bash
+    - run: bun run analyze:fallow
+      shell: bash
+    - run: npm pack --dry-run
+      shell: bash

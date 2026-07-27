@@ -24,10 +24,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - run: bun install --frozen-lockfile
-      - run: bun run check:all
-      - run: bun run analyze:fallow
-      - run: npm pack --dry-run
+      - uses: ./.github/actions/check
       - name: Verify release tag matches package version
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}

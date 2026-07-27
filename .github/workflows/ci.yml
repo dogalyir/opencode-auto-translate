@@ -16,7 +16,4 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - run: bun install --frozen-lockfile
-      - run: bun run check:all
-      - run: bun run analyze:fallow
-      - run: npm pack --dry-run
+      - uses: ./.github/actions/check
