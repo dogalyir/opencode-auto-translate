@@ -1,6 +1,6 @@
 {
   "name": "opencode-auto-translate",
-  "version": "0.1.12",
+  "version": "0.1.20",
   "description": "Translate user prompts to English before OpenCode sends them to the main model.",
   "license": "MIT",
   "keywords": [
