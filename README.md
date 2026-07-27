@@ -1,10 +1,10 @@
 # opencode-auto-translate
 
-An OpenCode plugin that translates user prompts to English before they reach the main model, while preserving the original session history.
+An OpenCode plugin that translates user prompts to English before they reach the main model, then translates assistant text back to the configured language.
 
 ## Requirements
 
-Configure an explicit `small_model`, because the plugin uses that exact OpenCode model for translation. Add the package to both OpenCode configs: `opencode.json` loads the server plugin and `tui.json` loads the TUI plugin.
+Configure an explicit `small_model`, because the plugin uses that OpenCode model for translation. Add the server plugin to `opencode.json` and the TUI plugin to `tui.json`.
 
 ```jsonc
 {
@@ -14,7 +14,7 @@ Configure an explicit `small_model`, because the plugin uses that exact OpenCode
 }
 ```
 
-The model can instead be selected in plugin options. `model` takes precedence over `small_model` and the global OpenCode setting. `variant` is passed to the translation request, and `lang` controls the TUI badge language:
+The model can instead be selected in plugin options. Precedence: `model`, global `small_model`, plugin `small_model`. `variant` is passed to translation requests. `lang` is the user's language and controls the TUI badge:
 
 ```jsonc
 {
@@ -25,15 +25,23 @@ The model can instead be selected in plugin options. `model` takes precedence ov
         "model": "openai/gpt-5.4-mini",
         "variant": "minimal",
         "lang": "Spanish",
-        "input": "show original + translation",
-        "output": "append translation",
+        "enabled": true,
+        "input": "show original",
+        "output": "show original + translation",
       },
     ],
   ],
 }
 ```
 
-Input translation changes only the model-facing message, so the visible session history keeps the original text while the model receives English. The response hook translates completed assistant text. `show original + translation` preserves English context. `show translation` also displays both texts because removing English would break future context.
+Runtime flow:
+
+1. The user writes in `lang`.
+2. User text is translated to English before the main model request.
+3. The model receives English and responds in English.
+4. Completed assistant `TextPart` content is translated to `lang` for display.
+
+Input translation changes only the model-facing message, so visible user history keeps the original text. `output: "show original"` keeps assistant text in English. Other output modes display the English original plus the translation; the current API cannot safely hide the English text without breaking future model context.
 
 Add the package to `tui.json` using the same package name and version:
 
@@ -44,15 +52,17 @@ Add the package to `tui.json` using the same package name and version:
 }
 ```
 
-Use Ctrl+P, `/translate`, or Ctrl+Shift+T to toggle translation. The prompt badge shows the current state.
+Use Ctrl+P, `/translate`, or Ctrl+Shift+T to toggle translation. The prompt badge shows the current state. `enabled` controls the initial server state; TUI state is persisted in OpenCode KV and can override it after toggling.
 
-Translation is fail-open: if the translation model fails, the original text is sent unchanged. The visible session history keeps the original user text, while the model-facing message receives the English translation.
+Translation is fail-open: if a translation request fails, the original text remains unchanged. The visible session history keeps original user text; the main model receives the English translation when successful.
 
 The translation request uses a temporary internal session with the configured small model. Temporary sessions are deleted after each request, and repeated text is cached for the current plugin instance.
 
-`input` display modes remain `show original`: OpenCode exposes model-message transformation, not independent persisted-history rendering. Output translation uses the configured `small_model`; internal translation tokens are not merged into the main session count, but still incur provider cost.
+`input` currently supports only `show original` behavior. OpenCode exposes model-message transformation, not independent persisted-history rendering. `output` accepts `show original`, `show translation`, and `show original + translation`; the latter two preserve English context. Translation sessions use the configured model, are deleted afterward, and are excluded from the main session token count but still incur provider cost. Repeated text is cached per plugin instance.
 
-For local development, build the package and use file entrypoints instead of npm:
+Assistant prose is translated through `experimental.text.complete`. The system hook tells the main model to write assistant prose in English. Tool calls, tool arguments, tool outputs, reasoning, commands, paths, URLs, code, diffs, and errors remain unchanged. Native `question` prompts and permission prompts remain English because the current plugin API does not expose a safe mutable display hook for them.
+
+For local development, run `bun run build`, then use file entrypoints instead of npm:
 
 ```jsonc
 // ~/.config/opencode/opencode.json
