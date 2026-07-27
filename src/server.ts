@@ -185,19 +185,33 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     return translated;
   }
 
+  function selectModel(configuredSmallModel: unknown): ModelReference | undefined {
+    const configured = z.string().safeParse(configuredSmallModel);
+    const configuredReference = configured.success
+      ? parseModelRef(configured.data)
+      : undefined;
+    const pluginModel =
+      pluginOptions.model === undefined
+        ? undefined
+        : parseModelRef(pluginOptions.model);
+    const optionModel =
+      pluginOptions.small_model === undefined
+        ? undefined
+        : parseModelRef(pluginOptions.small_model);
+    return pluginModel ?? configuredReference ?? optionModel;
+  }
+
   async function resolveModel(): Promise<ModelReference | undefined> {
-    const response = await client.config.get({ query: { directory } });
-    if (response.error || response.data === undefined) return undefined;
-    const configured = z.string().safeParse(response.data.small_model);
-    return (
-      (pluginOptions.model === undefined
-        ? undefined
-        : parseModelRef(pluginOptions.model)) ??
-      (configured.success ? parseModelRef(configured.data) : undefined) ??
-      (pluginOptions.small_model === undefined
-        ? undefined
-        : parseModelRef(pluginOptions.small_model))
-    );
+    try {
+      const response = await client.config.get({ query: { directory } });
+      if (response.error || response.data === undefined) return undefined;
+      return selectModel(response.data.small_model);
+    } catch (error) {
+      await log("warn", "Could not read OpenCode configuration", {
+        error: String(error),
+      });
+      return undefined;
+    }
   }
 
   return {
@@ -211,35 +225,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     },
     "experimental.chat.messages.transform": async (_input, output) => {
       if (!enabled) return;
-      const configResponse = await client.config.get({ query: { directory } });
-      if (configResponse.error) {
-        await log("warn", "Could not read OpenCode configuration", {
-          error: String(configResponse.error),
-        });
-        return;
-      }
-      const configData = configResponse.data;
-      if (configData === undefined) {
-        await log(
-          "warn",
-          "OpenCode configuration response did not include data",
-        );
-        return;
-      }
-      const configuredModel = z.string().safeParse(configData.small_model);
-      const configuredReference = configuredModel.success
-        ? parseModelRef(configuredModel.data)
-        : undefined;
-      const configuredPluginModel =
-        pluginOptions.model === undefined
-          ? undefined
-          : parseModelRef(pluginOptions.model);
-      const configuredOptionModel =
-        pluginOptions.small_model === undefined
-          ? undefined
-          : parseModelRef(pluginOptions.small_model);
-      const model =
-        configuredPluginModel ?? configuredReference ?? configuredOptionModel;
+      const model = await resolveModel();
       if (model === undefined) {
         await log(
           "warn",

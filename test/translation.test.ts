@@ -9,6 +9,14 @@ import {
 
 const serverModule = await import("../src/server");
 
+function getPluginFactory(): (...args: never[]) => unknown {
+  const pluginDescriptor = Object.getOwnPropertyDescriptor(serverModule, "default");
+  if (pluginDescriptor === undefined) throw new Error("Missing plugin factory");
+  const createPlugin = pluginDescriptor.value;
+  if (typeof createPlugin !== "function") throw new Error("Missing plugin factory");
+  return createPlugin;
+}
+
 test("server entrypoint exports only the plugin factory", () => {
   expect(Object.keys(serverModule)).toEqual(["default"]);
 });
@@ -89,8 +97,7 @@ test("plugin options provide strict defaults and accept model display settings",
 });
 
 test("plugin replaces the original message with the translation", async () => {
-  const createPlugin = Object.getOwnPropertyDescriptor(serverModule, "default")?.value;
-  if (typeof createPlugin !== "function") throw new Error("Missing plugin factory");
+  const createPlugin = getPluginFactory();
 
   const translationRequest = async () => ({
     data: { parts: [{ type: "text", text: "hello" }] },
@@ -132,7 +139,11 @@ test("plugin replaces the original message with the translation", async () => {
   };
   await Reflect.apply(transform, plugin, [{}, output]);
 
-  expect(output.messages[0]?.parts[0]?.text).toBe("hello");
+  const firstMessage = output.messages[0];
+  if (firstMessage === undefined) throw new Error("Missing translated message");
+  const firstPart = firstMessage.parts[0];
+  if (firstPart === undefined) throw new Error("Missing translated part");
+  expect(firstPart.text).toBe("hello");
   const responseTransform = Reflect.get(plugin, "experimental.text.complete");
   if (typeof responseTransform !== "function") throw new Error("Missing text transform");
   const response = { text: "hello" };
@@ -140,4 +151,32 @@ test("plugin replaces the original message with the translation", async () => {
   await Reflect.apply(responseTransform, plugin, [responseInput, response]);
   await Reflect.apply(responseTransform, plugin, [responseInput, response]);
   expect(response.text).toBe("hello\n\n[Translation]\nhello");
+});
+
+test("translation hooks fail open when configuration lookup throws", async () => {
+  const createPlugin = getPluginFactory();
+  const client = {
+    app: { log: async () => ({}) },
+    config: { get: async () => { throw new Error("configuration unavailable"); } },
+    session: {
+      create: async () => ({ data: { id: "unused" } }),
+      prompt: async () => ({ data: { parts: [] } }),
+      delete: async () => ({}),
+    },
+  };
+  const plugin = await Reflect.apply(createPlugin, undefined, [
+    { client, directory: "/tmp" },
+    { enabled: true, output: "show translation" },
+  ]);
+  if (plugin === null || (typeof plugin !== "object" && typeof plugin !== "function"))
+    throw new Error("Invalid plugin hooks");
+  const messageTransform = Reflect.get(plugin, "experimental.chat.messages.transform");
+  const responseTransform = Reflect.get(plugin, "experimental.text.complete");
+  if (typeof messageTransform !== "function" || typeof responseTransform !== "function")
+    throw new Error("Missing plugin hooks");
+  const output = { messages: [] };
+  const response = { text: "hello" };
+  await Reflect.apply(messageTransform, plugin, [{}, output]);
+  await Reflect.apply(responseTransform, plugin, [{ partID: "part", sessionID: "session" }, response]);
+  expect(response.text).toBe("hello");
 });
