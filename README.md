@@ -33,7 +33,7 @@ The model can instead be selected in plugin options. `model` takes precedence ov
 }
 ```
 
-Input translation changes only the model-facing message, so the visible session history keeps the original text while the model receives English. The current OpenCode plugin API does not expose a hook for translating rendered assistant output after streaming.
+Input translation changes only the model-facing message, so the visible session history keeps the original text while the model receives English. The response hook translates completed assistant text. `show original + translation` preserves English context. `show translation` also displays both texts because removing English would break future context.
 
 Add the package to `tui.json` using the same package name and version:
 
@@ -50,7 +50,7 @@ Translation is fail-open: if the translation model fails, the original text is s
 
 The translation request uses a temporary internal session with the configured small model. Temporary sessions are deleted after each request, and repeated text is cached for the current plugin instance.
 
-The `input` and `output` options are accepted for forward compatibility, but currently behave as `show original`; assistant response translation and alternate display modes are not implemented by the current OpenCode transform API.
+`input` display modes remain `show original`: OpenCode exposes model-message transformation, not independent persisted-history rendering. Output translation uses the configured `small_model`; internal translation tokens are not merged into the main session count, but still incur provider cost.
 
 For local development, build the package and use file entrypoints instead of npm:
 
