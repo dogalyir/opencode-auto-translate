@@ -213,6 +213,45 @@ test("plugin replaces the original message with the translation", async () => {
   expect(response.text).toBe("hello\n\n----------------------------------------\n[Translation]\nhello");
 });
 
+test("plugin does not append duplicate translations for concurrent completion hooks", async () => {
+  const createPlugin = getPluginFactory();
+  let releaseTranslation: (() => void) | undefined;
+  const translationStarted = new Promise<void>((resolve) => {
+    releaseTranslation = resolve;
+  });
+  const client = {
+    app: { log: async () => ({}) },
+    config: { get: async () => ({ data: { small_model: "openai/model" } }) },
+    session: {
+      create: async () => ({ data: { id: "translation-session" } }),
+      prompt: async () => {
+        await translationStarted;
+        return { data: { parts: [{ type: "text", text: "hola" }] } };
+      },
+      delete: async () => ({}),
+    },
+  };
+  const plugin = await Reflect.apply(createPlugin, undefined, [
+    { client, directory: "/tmp" },
+    { enabled: true, output: "show translation", lang: "Spanish" },
+  ]);
+  if (plugin === null || typeof plugin !== "object") throw new Error("Invalid plugin hooks");
+  const responseTransform = Reflect.get(plugin, "experimental.text.complete");
+  if (typeof responseTransform !== "function") throw new Error("Missing text transform");
+
+  const firstResponse = { text: "hello" };
+  const secondResponse = { text: "hello" };
+  const input = { sessionID: "user-session", partID: "response-part" };
+  const first = Reflect.apply(responseTransform, plugin, [input, firstResponse]);
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  const second = Reflect.apply(responseTransform, plugin, [input, secondResponse]);
+  releaseTranslation?.();
+  await Promise.all([first, second]);
+
+  expect(firstResponse.text).toBe("hello\n\n----------------------------------------\n[Translation]\nhola");
+  expect(secondResponse.text).toBe("hello");
+});
+
 test("translation hooks fail open when configuration response is malformed", async () => {
   const createPlugin = getPluginFactory();
   let sessionCreates = 0;
