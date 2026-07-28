@@ -49,6 +49,15 @@ opencode plugin opencode-auto-translate@latest
 }
 ```
 
+> [!WARNING]
+> OpenCode caches npm plugins, so `@latest` is not necessarily re-fetched on every startup. After a new release, close OpenCode and remove this plugin's cache entry to force an update:
+>
+> ```bash
+> rm -rf ~/.cache/opencode/packages/opencode-auto-translate@latest
+> ```
+>
+> Run `opencode debug paths` to see the cache root when it differs from `~/.cache/opencode`.
+
 The package must not be combined into one module: OpenCode requires server and TUI modules to be target-exclusive. This package keeps the implementations in `src/server.ts` and `src/tui.tsx`, while sharing domain logic in `src/translation.ts` and configuration loading in `src/config.ts`.
 
 For a server-only or headless installation, configure only the server entrypoint:
