@@ -34,7 +34,10 @@ test("TUI initializes with invalid options and uses the safe language fallback",
   expect(typeof command.run).toBe("function");
   const publishPromise = command.run();
   await publishPromise;
-  expect(published).toEqual(["opencode-auto-translate.toggle:on"]);
+  expect(published).toEqual([
+    "opencode-auto-translate.toggle:off",
+    "opencode-auto-translate.toggle:on",
+  ]);
   if (slotRenderer === undefined) throw new Error("Missing status slot");
   expect(typeof slotRenderer).toBe("function");
 });

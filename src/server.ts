@@ -1,18 +1,17 @@
 import type { Plugin } from "@opencode-ai/plugin";
 import { z } from "zod";
+import { loadPluginOptions } from "./config";
 import {
   cleanTranslation,
   displayTranslation,
   isTranslatablePart,
   parseModelRef,
   parseToggleCommand,
-  pluginOptionsSchema,
   TRANSLATION_AGENT,
   TRANSLATION_MODEL_INSTRUCTION,
   TRANSLATION_ID,
   translationPrompt,
   type ModelReference,
-  type PluginOptions,
 } from "./translation";
 
 const sessionIdSchema = z.string().min(1);
@@ -30,13 +29,6 @@ const messagesSchema = z.array(
     parts: z.array(z.record(z.string(), z.unknown())),
   }).passthrough(),
 );
-
-function parsePluginOptions(options: unknown): PluginOptions {
-  const parsed = pluginOptionsSchema.safeParse(options);
-  if (parsed.success) return parsed.data;
-  console.warn("Invalid auto-translation options; using defaults", parsed.error.issues);
-  return pluginOptionsSchema.parse({});
-}
 
 function extractTranslation(value: unknown): string | undefined {
   const parsed = translationResponseSchema.safeParse(value);
@@ -59,7 +51,7 @@ function parseMessages(value: unknown): MessageList | undefined {
 }
 
 const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
-  const pluginOptions = parsePluginOptions(options);
+  const pluginOptions = await loadPluginOptions(options);
   let enabled = pluginOptions.enabled === true;
   const cache = new Map<string, string>();
   const inFlight = new Map<string, Promise<string | undefined>>();

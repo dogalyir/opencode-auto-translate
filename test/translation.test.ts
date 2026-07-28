@@ -1,4 +1,8 @@
 import { expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { loadPluginOptions } from "../src/config";
 import {
   isTranslatablePart,
   parseModelRef,
@@ -79,8 +83,12 @@ test("translation prompt supports translating the response back to the configure
 
 test("display modes preserve English context", () => {
   expect(displayTranslation("Hello", "Hola", "show original")).toBe("Hello");
-  expect(displayTranslation("Hello", "Hola", "show translation")).toBe("Hello\n\nHola");
-  expect(displayTranslation("Hello", "Hola", "show original + translation")).toBe("Hello\n\n[Translation]\nHola");
+  expect(displayTranslation("Hello", "Hola", "show translation")).toBe(
+    "Hello\n\n----------------------------------------\n[Translation]\nHola",
+  );
+  expect(displayTranslation("Hello", "Hola", "show original + translation")).toBe(
+    "Hello\n\n----------------------------------------\n[Translation]\nHola",
+  );
 });
 
 test("plugin options provide strict defaults and accept model display settings", () => {
@@ -102,6 +110,27 @@ test("plugin options provide strict defaults and accept model display settings",
     variant: "minimal",
     lang: "Spanish",
   });
+});
+
+test("shared config is loaded before inline options", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "auto-translate-"));
+  const previousDirectory = process.env["OPENCODE_CONFIG_DIR"];
+  try {
+    process.env["OPENCODE_CONFIG_DIR"] = directory;
+    await writeFile(
+      join(directory, "translate.json"),
+      JSON.stringify({ lang: "Spanish", output: "show translation", model: "openai/from-file" }),
+    );
+    await expect(loadPluginOptions({ lang: "French", model: "openai/from-inline" })).resolves.toMatchObject({
+      lang: "French",
+      output: "show translation",
+      model: "openai/from-inline",
+    });
+  } finally {
+    if (previousDirectory === undefined) delete process.env["OPENCODE_CONFIG_DIR"];
+    else process.env["OPENCODE_CONFIG_DIR"] = previousDirectory;
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("plugin replaces the original message with the translation", async () => {
@@ -171,7 +200,7 @@ test("plugin replaces the original message with the translation", async () => {
   const responseInput = { sessionID: "user-session", partID: "response-part" };
   await Reflect.apply(responseTransform, plugin, [responseInput, response]);
   await Reflect.apply(responseTransform, plugin, [responseInput, response]);
-  expect(response.text).toBe("hello\n\n[Translation]\nhello");
+  expect(response.text).toBe("hello\n\n----------------------------------------\n[Translation]\nhello");
 });
 
 test("translation hooks fail open when configuration response is malformed", async () => {
