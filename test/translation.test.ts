@@ -3,6 +3,8 @@ import {
   isTranslatablePart,
   parseModelRef,
   pluginOptionsSchema,
+  TRANSLATION_EVENT,
+  parseToggleCommand,
   translationPrompt,
   displayTranslation,
 } from "../src/translation";
@@ -26,6 +28,12 @@ test("parses model references with slash-containing model IDs", () => {
     providerID: "openrouter",
     modelID: "openai/gpt-4o-mini",
   });
+});
+
+test("parses toggle commands explicitly", () => {
+  expect(parseToggleCommand(`${TRANSLATION_EVENT}:on`)).toBe(true);
+  expect(parseToggleCommand(`${TRANSLATION_EVENT}:off`)).toBe(false);
+  expect(parseToggleCommand(`${TRANSLATION_EVENT}:unknown`)).toBeUndefined();
 });
 
 test("rejects malformed model references", () => {
@@ -125,15 +133,25 @@ test("plugin replaces the original message with the translation", async () => {
   await Reflect.apply(event, plugin, [{
     event: {
       type: "tui.command.execute",
-      properties: { command: "opencode-auto-translate.toggle:on" },
+      properties: { command: `${TRANSLATION_EVENT}:on` },
     },
   }]);
 
   const output = {
     messages: [
       {
-        info: { role: "user", sessionID: "user-session" },
-        parts: [{ id: "part", type: "text", text: "hola" }],
+        info: {
+          role: "user",
+          sessionID: "user-session",
+          id: "message-id",
+          metadata: { source: "test" },
+        },
+        parts: [{
+          id: "part",
+          type: "text",
+          text: "hola",
+          metadata: { source: "test" },
+        }],
       },
     ],
   };
@@ -144,6 +162,9 @@ test("plugin replaces the original message with the translation", async () => {
   const firstPart = firstMessage.parts[0];
   if (firstPart === undefined) throw new Error("Missing translated part");
   expect(firstPart.text).toBe("hello");
+  expect(firstMessage.info.id).toBe("message-id");
+  expect(firstMessage.info.metadata).toEqual({ source: "test" });
+  expect(firstPart.metadata).toEqual({ source: "test" });
   const responseTransform = Reflect.get(plugin, "experimental.text.complete");
   if (typeof responseTransform !== "function") throw new Error("Missing text transform");
   const response = { text: "hello" };
@@ -151,6 +172,41 @@ test("plugin replaces the original message with the translation", async () => {
   await Reflect.apply(responseTransform, plugin, [responseInput, response]);
   await Reflect.apply(responseTransform, plugin, [responseInput, response]);
   expect(response.text).toBe("hello\n\n[Translation]\nhello");
+});
+
+test("translation hooks fail open when configuration response is malformed", async () => {
+  const createPlugin = getPluginFactory();
+  let sessionCreates = 0;
+  const client = {
+    app: { log: async () => ({}) },
+    config: { get: async () => ({ data: { small_model: 42 } }) },
+    session: {
+      create: async () => {
+        sessionCreates += 1;
+        return { data: { id: "unexpected" } };
+      },
+    },
+  };
+  const plugin = await Reflect.apply(createPlugin, undefined, [
+    { client, directory: "/tmp" },
+    { enabled: true },
+  ]);
+  if (plugin === null || typeof plugin !== "object") throw new Error("Invalid plugin hooks");
+  const transform = Reflect.get(plugin, "experimental.chat.messages.transform");
+  if (typeof transform !== "function") throw new Error("Missing message transform");
+  const output = {
+    messages: [{
+      info: { role: "user", sessionID: "session" },
+      parts: [{ id: "part", type: "text", text: "hola" }],
+    }],
+  };
+  await Reflect.apply(transform, plugin, [{}, output]);
+  const firstMessage = output.messages[0];
+  if (firstMessage === undefined) throw new Error("Missing message");
+  const firstPart = firstMessage.parts[0];
+  if (firstPart === undefined) throw new Error("Missing part");
+  expect(firstPart.text).toBe("hola");
+  expect(sessionCreates).toBe(0);
 });
 
 test("translation hooks fail open when configuration lookup throws", async () => {

@@ -1,13 +1,20 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginModule } from "@opencode-ai/plugin/tui";
 import { createSignal } from "solid-js";
-import { pluginOptionsSchema, TRANSLATION_EVENT } from "./translation";
+import {
+  pluginOptionsSchema,
+  TRANSLATION_EVENT,
+  TRANSLATION_ID,
+} from "./translation";
 
-const ID = "opencode-auto-translate";
+const ID = TRANSLATION_ID;
 const KEY = `${ID}.enabled`;
 
 const tui: TuiPlugin = async (api, options) => {
   const parsedOptions = pluginOptionsSchema.safeParse(options);
+  if (!parsedOptions.success) {
+    console.warn("Invalid auto-translation TUI options; using defaults", parsedOptions.error.issues);
+  }
   const language = parsedOptions.success ? parsedOptions.data.lang : "English";
   const storedValue = api.kv.get<unknown>(KEY, false);
   const initialState = typeof storedValue === "boolean" ? storedValue : false;
@@ -30,7 +37,9 @@ const tui: TuiPlugin = async (api, options) => {
         },
       });
       if (!response.error) return;
-    } catch {
+      console.warn("Auto-translation toggle rejected", String(response.error));
+    } catch (error) {
+      console.warn("Auto-translation toggle publish failed", String(error));
       // Restore the local state when the server cannot receive the toggle.
     }
     setEnabled(!enabled);

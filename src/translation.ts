@@ -1,7 +1,8 @@
 import { z } from "zod";
 
-export const TRANSLATION_EVENT = "opencode-auto-translate.toggle";
-export const TRANSLATION_SERVICE = "opencode-auto-translate";
+export const TRANSLATION_ID = "opencode-auto-translate";
+export const TRANSLATION_EVENT = `${TRANSLATION_ID}.toggle`;
+const DISPLAY_MODES = ["show original", "show translation", "show original + translation"] as const;
 export const TRANSLATION_AGENT = "general";
 export const TRANSLATION_MODEL_INSTRUCTION =
   "You are a precise translation engine. Translate text only.";
@@ -12,12 +13,8 @@ export const pluginOptionsSchema = z.object({
   model: z.string().optional(),
   variant: z.string().trim().min(1).optional(),
   lang: z.string().trim().min(1).default("English"),
-  input: z
-    .enum(["show original", "show translation", "show original + translation"])
-    .default("show original"),
-  output: z
-    .enum(["show original", "show translation", "show original + translation"])
-    .default("show original"),
+  input: z.enum(DISPLAY_MODES).default("show original"),
+  output: z.enum(DISPLAY_MODES).default("show original"),
   small_model: z.string().optional(),
 });
 

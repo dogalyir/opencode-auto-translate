@@ -9,7 +9,7 @@ import {
   pluginOptionsSchema,
   TRANSLATION_AGENT,
   TRANSLATION_MODEL_INSTRUCTION,
-  TRANSLATION_SERVICE,
+  TRANSLATION_ID,
   translationPrompt,
   type ModelReference,
   type PluginOptions,
@@ -21,16 +21,20 @@ const textResponseSchema = z.object({
   text: z.string(),
 });
 const translationResponseSchema = z.object({ parts: z.array(z.unknown()) });
+const configResponseSchema = z.object({ small_model: z.unknown().optional() }).passthrough();
 const messagesSchema = z.array(
   z.object({
-    info: z.object({ role: z.string(), sessionID: z.string().min(1) }),
+    info: z
+      .object({ role: z.string(), sessionID: z.string().min(1) })
+      .passthrough(),
     parts: z.array(z.record(z.string(), z.unknown())),
-  }),
+  }).passthrough(),
 );
 
 function parsePluginOptions(options: unknown): PluginOptions {
   const parsed = pluginOptionsSchema.safeParse(options);
   if (parsed.success) return parsed.data;
+  console.warn("Invalid auto-translation options; using defaults", parsed.error.issues);
   return pluginOptionsSchema.parse({});
 }
 
@@ -46,8 +50,12 @@ function extractTranslation(value: unknown): string | undefined {
   return cleaned.length > 0 ? cleaned : undefined;
 }
 
-function isMessages(value: unknown): value is z.infer<typeof messagesSchema> {
-  return messagesSchema.safeParse(value).success;
+type MessageList = z.infer<typeof messagesSchema>;
+
+function parseMessages(value: unknown): MessageList | undefined {
+  const parsed = messagesSchema.safeParse(value);
+  if (!parsed.success) return undefined;
+  return parsed.data;
 }
 
 const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
@@ -65,10 +73,11 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
   ) {
     try {
       await client.app.log({
-        body: { service: TRANSLATION_SERVICE, level, message, extra },
+        body: { service: TRANSLATION_ID, level, message, extra },
       });
-    } catch {
+    } catch (error) {
       // Logging must not break the fail-open translation path.
+      console.warn("Auto-translation logging failed", String(error));
     }
   }
 
@@ -205,7 +214,9 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     try {
       const response = await client.config.get({ query: { directory } });
       if (response.error || response.data === undefined) return undefined;
-      return selectModel(response.data.small_model);
+      const parsedConfig = configResponseSchema.safeParse(response.data);
+      if (!parsedConfig.success) return undefined;
+      return selectModel(parsedConfig.data.small_model);
     } catch (error) {
       await log("warn", "Could not read OpenCode configuration", {
         error: String(error),
@@ -233,8 +244,12 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
         );
         return;
       }
-      if (!isMessages(output.messages)) return;
-      for (const message of output.messages) {
+      const messages = parseMessages(output.messages);
+      if (messages === undefined) return;
+      for (const [index, message] of messages.entries()) {
+        const outputMessage = output.messages[index];
+        if (outputMessage === undefined) return;
+        Object.assign(outputMessage, message);
         if (
           message.info.role !== "user" ||
           internalSessions.has(message.info.sessionID)
