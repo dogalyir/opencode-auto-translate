@@ -2,28 +2,27 @@ import { expect, test } from "bun:test"
 
 const tuiModule = await import("../src/tui");
 
-test("TUI initializes with invalid options and uses the safe language fallback", async () => {
-  const layers: Array<{ commands?: Array<{ run?: () => Promise<void> }> }> = [];
+function createTuiApi(storedValue: unknown) {
   const published: string[] = [];
+  const layers: Array<{ commands?: Array<{ run?: () => Promise<void> }> }> = [];
   let slotRenderer: (() => unknown) | undefined;
   const api = {
-    kv: { get: () => false, set: () => undefined },
+    kv: { get: () => storedValue, set: () => undefined },
     ui: { toast: () => undefined },
-    client: {
-      tui: {
-        publish: async ({ body }: { body: { properties: { command: string } } }) => {
-          published.push(body.properties.command);
-          return {};
-        },
-      },
-    },
+    client: { tui: { publish: async ({ body }: { body: { properties: { command: string } } }) => {
+      published.push(body.properties.command);
+      return {};
+    } } },
     keymap: { registerLayer: (layer: { commands?: Array<{ run?: () => Promise<void> }> }) => layers.push(layer) },
-    slots: {
-      register: (registration: { slots: { session_prompt_right: () => unknown } }) => {
-        slotRenderer = registration.slots.session_prompt_right;
-      },
-    },
+    slots: { register: (registration: { slots: { session_prompt_right: () => unknown } }) => {
+      slotRenderer = registration.slots.session_prompt_right;
+    } },
   };
+  return { api, layers, published, getSlotRenderer: () => slotRenderer };
+}
+
+test("TUI initializes with invalid options and uses the safe language fallback", async () => {
+  const { api, layers, published, getSlotRenderer } = createTuiApi(false);
   const plugin = tuiModule.default;
   await Reflect.apply(plugin.tui, undefined, [api, "/tmp", { lang: 42 }]);
   expect(layers.length).toBe(2);
@@ -38,8 +37,17 @@ test("TUI initializes with invalid options and uses the safe language fallback",
     "opencode-auto-translate.toggle:off",
     "opencode-auto-translate.toggle:on",
   ]);
+  const slotRenderer = getSlotRenderer();
   if (slotRenderer === undefined) throw new Error("Missing status slot");
   expect(typeof slotRenderer).toBe("function");
+});
+
+test("TUI uses the configured enabled state when no toggle state is persisted", async () => {
+  const { api, published } = createTuiApi(undefined);
+
+  await Reflect.apply(tuiModule.default.tui, undefined, [api, "/tmp", { enabled: true }]);
+
+  expect(published).toEqual(["opencode-auto-translate.toggle:on"]);
 });
 
 test("TUI bundle keeps Solid as a host dependency", async () => {

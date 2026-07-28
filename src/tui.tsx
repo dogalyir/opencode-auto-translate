@@ -13,7 +13,7 @@ const KEY = `${ID}.enabled`;
 const tui: TuiPlugin = async (api, options) => {
   const pluginOptions = await loadPluginOptions(options);
   const language = pluginOptions.lang;
-  const storedValue = api.kv.get<unknown>(KEY, false);
+  const storedValue = api.kv.get<unknown>(KEY, undefined);
   const initialState = typeof storedValue === "boolean" ? storedValue : pluginOptions.enabled === true;
   const [isEnabled, setEnabled] = createSignal(initialState);
   const publish = async (enabled: boolean, showToast = true, rollbackOnFailure = true) => {
