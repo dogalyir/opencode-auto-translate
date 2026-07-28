@@ -10,7 +10,7 @@ import {
 const ID = TRANSLATION_ID;
 const KEY = `${ID}.enabled`;
 
-const tui: TuiPlugin = async (api, options) => {
+const tui: TuiPlugin = async (api, _directory, options) => {
   const pluginOptions = await loadPluginOptions(options);
   const language = pluginOptions.lang;
   const storedValue = api.kv.get<unknown>(KEY, undefined);
