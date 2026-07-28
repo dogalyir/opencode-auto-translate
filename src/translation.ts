@@ -16,7 +16,6 @@ export const pluginOptionsSchema = z.object({
   lang: z.string().trim().min(1).default("English"),
   input: z.enum(DISPLAY_MODES).default("show original"),
   output: z.enum(DISPLAY_MODES).default("show original"),
-  small_model: z.string().optional(),
 });
 
 const modelReferenceSchema = z.object({

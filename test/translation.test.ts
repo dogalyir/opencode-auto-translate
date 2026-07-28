@@ -110,6 +110,9 @@ test("plugin options provide strict defaults and accept model display settings",
     variant: "minimal",
     lang: "Spanish",
   });
+  expect(pluginOptionsSchema.parse({ small_model: "openai/legacy" })).not.toHaveProperty(
+    "small_model",
+  );
 });
 
 test("shared config is loaded before inline options", async () => {
@@ -135,10 +138,12 @@ test("shared config is loaded before inline options", async () => {
 
 test("plugin replaces the original message with the translation", async () => {
   const createPlugin = getPluginFactory();
+  let requestedModel: unknown;
 
-  const translationRequest = async () => ({
-    data: { parts: [{ type: "text", text: "hello" }] },
-  });
+  const translationRequest = async (request: { body: { model: unknown } }) => {
+    requestedModel = request.body.model;
+    return { data: { parts: [{ type: "text", text: "hello" }] } };
+  };
   const client = {
     app: { log: async () => ({}) },
     config: { get: async () => ({ data: { small_model: "openai/gpt-5.6-luna" } }) },
@@ -150,7 +155,11 @@ test("plugin replaces the original message with the translation", async () => {
   };
   const plugin = await Reflect.apply(createPlugin, undefined, [
     { client, directory: "/tmp" },
-    { output: "show original + translation", lang: "Spanish" },
+    {
+      output: "show original + translation",
+      lang: "Spanish",
+      model: "openai/override",
+    },
   ]);
   if (plugin === null || (typeof plugin !== "object" && typeof plugin !== "function"))
     throw new Error("Invalid plugin hooks");
@@ -191,6 +200,7 @@ test("plugin replaces the original message with the translation", async () => {
   const firstPart = firstMessage.parts[0];
   if (firstPart === undefined) throw new Error("Missing translated part");
   expect(firstPart.text).toBe("hello");
+  expect(requestedModel).toEqual({ providerID: "openai", modelID: "override" });
   expect(firstMessage.info.id).toBe("message-id");
   expect(firstMessage.info.metadata).toEqual({ source: "test" });
   expect(firstPart.metadata).toEqual({ source: "test" });

@@ -195,11 +195,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
       pluginOptions.model === undefined
         ? undefined
         : parseModelRef(pluginOptions.model);
-    const optionModel =
-      pluginOptions.small_model === undefined
-        ? undefined
-        : parseModelRef(pluginOptions.small_model);
-    return pluginModel ?? configuredReference ?? optionModel;
+    return pluginModel ?? configuredReference;
   }
 
   async function resolveModel(): Promise<ModelReference | undefined> {

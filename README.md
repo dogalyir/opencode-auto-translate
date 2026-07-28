@@ -14,7 +14,7 @@ An OpenCode plugin that translates user prompts to English before they reach the
 - Keep tool calls, tool arguments, tool outputs, reasoning, code, paths, URLs, commands, diffs, and errors unchanged.
 - Toggle with Ctrl+P, `/translate`, or Ctrl+Shift+T.
 - Show an active-language badge in the TUI.
-- Use OpenCode's `small_model` or an explicit plugin model.
+- Use OpenCode's `small_model` or an explicit optional plugin model override.
 - Configure the server and TUI from one global `translate.json` file.
 - Persist the TUI toggle state through OpenCode KV.
 - Fail open when translation fails.
@@ -88,8 +88,7 @@ The file is user-global only. Project-level `translate.json` files are not read.
   "variant": "minimal",
   "lang": "Spanish",
   "input": "show original",
-  "output": "show translation",
-  "small_model": "openai/gpt-4o-mini"
+  "output": "show translation"
 }
 ```
 
@@ -118,9 +117,8 @@ The translation model is selected with this precedence:
 
 1. `model` from inline options or `translate.json`.
 2. OpenCode's global `small_model`.
-3. `small_model` from inline options or `translate.json`.
 
-`model` and `small_model` must use the `provider/model` format. `variant` is passed to translation requests. `lang` controls the assistant output language and the TUI badge.
+`model` and OpenCode's `small_model` must use the `provider/model` format. `model` is optional and explicitly overrides OpenCode's global `small_model`. Configure `small_model` in `opencode.json` when no override is provided. `variant` is passed to translation requests. `lang` controls the assistant output language and the TUI badge.
 
 Inline options remain available when needed:
 
@@ -185,7 +183,7 @@ With the normal package installation, OpenCode resolves the TUI target automatic
 
 The TUI reads persisted KV state first. If no KV state exists, it uses `enabled` from `translate.json`. During startup it publishes the initial state to the server without showing a toggle toast. User-triggered toggles update KV, update the badge, show a toast, and publish the state to the server. If a user-triggered publish fails, the local state is rolled back.
 
-The translation request uses a temporary internal session with the configured small model. Temporary sessions are deleted after each request, and repeated text is cached for the current plugin instance. Translation sessions are excluded from the main session token count but still incur provider cost.
+The translation request uses a temporary internal session with the selected model. Temporary sessions are deleted after each request, and repeated text is cached for the current plugin instance. Translation sessions are excluded from the main session token count but still incur provider cost.
 
 Translation is fail-open: if configuration lookup, session creation, translation, response parsing, or cleanup fails, the original content remains unchanged and the failure is logged without breaking the main request.
 
