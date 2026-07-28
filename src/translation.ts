@@ -10,12 +10,15 @@ export const TRANSLATION_MODEL_INSTRUCTION =
 const TRANSLATION_SOURCE = "the source language";
 
 export const pluginOptionsSchema = z.object({
-  enabled: z.boolean().optional(),
-  model: z.string().optional(),
-  variant: z.string().trim().min(1).optional(),
-  lang: z.string().trim().min(1).default("English"),
-  input: z.enum(DISPLAY_MODES).default("show original"),
-  output: z.enum(DISPLAY_MODES).default("show original"),
+  enabled: z.boolean().optional().meta({ description: "Enable or disable automatic translation." }),
+  model: z.string().optional().meta({ description: "Translation model in provider/model format." }),
+  variant: z.string().trim().min(1).optional().meta({ description: "Optional provider-specific model variant." }),
+  lang: z.string().trim().min(1).default("English").meta({ description: "Language used for translating assistant responses." }),
+  input: z.enum(DISPLAY_MODES).default("show original").meta({ description: "How translated user prompts are displayed." }),
+  output: z.enum(DISPLAY_MODES).default("show original").meta({ description: "How translated assistant responses are displayed." }),
+}).meta({
+  title: "OpenCode Auto Translate configuration",
+  description: "Global configuration for the opencode-auto-translate plugin.",
 });
 
 const modelReferenceSchema = z.object({

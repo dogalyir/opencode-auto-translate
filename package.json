@@ -38,7 +38,8 @@
     "./tui": "./dist/tui.js"
   },
   "scripts": {
-    "build": "bun build src/server.ts src/tui.tsx --outdir dist --target bun --external '@opentui/*' --external 'solid-js'",
+    "generate:schema": "bun scripts/generate-schema.ts",
+    "build": "bun run generate:schema && bun build src/server.ts src/tui.tsx --outdir dist --target bun --external '@opentui/*' --external 'solid-js'",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "lint": "bunx oxlint src test",
