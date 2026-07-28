@@ -7,7 +7,7 @@ test("TUI initializes with invalid options and uses the safe language fallback",
   const published: string[] = [];
   let slotRenderer: (() => unknown) | undefined;
   const api = {
-    kv: { get: () => undefined, set: () => undefined },
+    kv: { get: () => false, set: () => undefined },
     ui: { toast: () => undefined },
     client: {
       tui: {
