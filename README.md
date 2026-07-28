@@ -10,14 +10,14 @@ An OpenCode plugin that translates user prompts to English before they reach the
 ## Features
 
 - Translate user prompts to English before the main model request.
-- Translate completed assistant prose back to the configured language.
-- Keep tool calls, tool arguments, tool outputs, reasoning, code, paths, URLs, commands, diffs, and errors unchanged.
-- Toggle with Ctrl+P, `/translate`, or Ctrl+Shift+T.
-- Show an active-language badge in the TUI.
-- Use OpenCode's `small_model` or an explicit optional plugin model override.
-- Configure the server and TUI from one global `translate.json` file.
-- Persist the TUI toggle state through OpenCode KV.
-- Fail open when translation fails.
+- Translate completed assistant prose to the configured language.
+- Preserve tool calls, tool arguments, tool output, reasoning, code, paths, URLs, commands, diffs, and errors.
+- Toggle translation with `/translate` or `Ctrl+Shift+T`.
+- Show the current state and language in the TUI prompt badge.
+- Use an explicit translation model or OpenCode's global `small_model`.
+- Share one global `translate.json` configuration between the server and TUI plugins.
+- Persist the toggle state through OpenCode KV.
+- Fail open: translation failures never replace the original content with an error.
 
 ## Compatibility
 
@@ -27,11 +27,13 @@ An OpenCode plugin that translates user prompts to English before they reach the
 
 ## Installation
 
-Install the package once through OpenCode. A package can expose both targets, and this package does so with separate server and TUI entrypoints. The installer detects both targets and adds the package to both configuration files:
+Install the package through OpenCode:
 
 ```bash
 opencode plugin opencode-auto-translate@latest
 ```
+
+The package exposes separate server and TUI entrypoints. OpenCode can therefore load it from both configuration files:
 
 ```jsonc
 // ~/.config/opencode/opencode.json
@@ -49,40 +51,41 @@ opencode plugin opencode-auto-translate@latest
 }
 ```
 
-> [!WARNING]
-> OpenCode caches npm plugins, so `@latest` is not necessarily re-fetched on every startup. After a new release, close OpenCode and remove this plugin's cache entry to force an update:
->
-> ```bash
-> rm -rf ~/.cache/opencode/packages/opencode-auto-translate@latest
-> ```
->
-> Run `opencode debug paths` to see the cache root when it differs from `~/.cache/opencode`.
+OpenCode caches npm plugins. To force a newly published `@latest` version to be downloaded, close OpenCode and remove its cache entry:
 
-The package must not be combined into one module: OpenCode requires server and TUI modules to be target-exclusive. This package keeps the implementations in `src/server.ts` and `src/tui.tsx`, while sharing domain logic in `src/translation.ts` and configuration loading in `src/config.ts`.
+```bash
+rm -rf ~/.cache/opencode/packages/opencode-auto-translate@latest
+```
 
-For a server-only or headless installation, configure only the server entrypoint:
+Use `opencode debug paths` to find the cache root when it differs from `~/.cache/opencode`.
+
+### Server-only installation
+
+For headless use, configure only the server plugin:
 
 ```jsonc
+// ~/.config/opencode/opencode.json
 {
   "$schema": "https://opencode.ai/config.json",
   "plugin": ["opencode-auto-translate@latest"],
 }
 ```
 
-Server-only mode translates prompts and assistant text but does not provide the TUI toggle, keybind, badge, toast notifications, or KV persistence. A TUI-only installation cannot perform server message translation.
+Server-only mode translates prompts and assistant text but does not provide the TUI toggle, keybind, badge, toast notifications, or KV persistence. A TUI-only installation cannot translate server messages.
 
 ## Configuration
 
-The recommended configuration is one global `translate.json` file. It is loaded from the first applicable location:
+The recommended setup is one global `translate.json` file. The plugin checks these locations in order:
 
 1. `$OPENCODE_CONFIG_DIR/translate.json`
 2. `$XDG_CONFIG_HOME/opencode/translate.json`
 3. `~/.config/opencode/translate.json`
 
-The file is user-global only. Project-level `translate.json` files are not read.
+Only the global file is read. Project-level `translate.json` files are ignored.
 
 ```json
 {
+  "$schema": "https://unpkg.com/opencode-auto-translate@latest/dist/translate.schema.json",
   "enabled": true,
   "model": "openai/gpt-5.6-luna",
   "variant": "minimal",
@@ -92,35 +95,45 @@ The file is user-global only. Project-level `translate.json` files are not read.
 }
 ```
 
-All fields are optional. Defaults are:
+The published schema is generated from the same Zod schema used by both runtimes. It provides editor autocomplete, descriptions, defaults, enum suggestions, and validation. Unknown properties are rejected by the schema so misspelled options are visible in the editor.
 
-```json
-{
-  "lang": "English",
-  "input": "show original",
-  "output": "show original"
-}
+### Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `enabled` | boolean | unset | Initial translation state used when no persisted TUI state exists. |
+| `model` | string | unset | Translation model in `provider/model` format. Overrides OpenCode's `small_model`. |
+| `variant` | string | unset | Optional provider-specific model variant. |
+| `lang` | string | `English` | Target language for assistant translations and the TUI badge. |
+| `input` | enum | `show original` | User-prompt display mode. Currently only `show original` is supported by OpenCode's transform API. |
+| `output` | enum | `show original` | Assistant display mode. |
+
+Valid `output` values are:
+
+- `show original`: display only the English assistant text.
+- `show translation`: display the English text, separator, and localized translation.
+- `show original + translation`: display the same English text plus the `[Translation]` label and localized translation.
+
+The translation-inclusive format is:
+
+```text
+English original
+
+----------------------------------------
+[Translation]
+Localized translation
 ```
 
-`translate.json` is validated with the same Zod schema used by both runtimes. Missing, unreadable, malformed, or invalid files fail open and fall back to inline options and defaults.
+The English original is retained because hiding it can break future model context with the current OpenCode API.
 
-Options are merged in this order:
+Missing, unreadable, malformed, or invalid configuration files fail open. The plugin logs the problem and falls back to inline options and defaults. Options are resolved in this order:
 
 1. Built-in defaults.
 2. Global `translate.json`.
-3. Inline plugin options, when present.
+3. Inline plugin options.
 4. Persisted TUI enabled state from OpenCode KV.
 
-Inline options remain supported for compatibility, but they should normally be omitted so server and TUI cannot drift apart.
-
-The translation model is selected with this precedence:
-
-1. `model` from inline options or `translate.json`.
-2. OpenCode's global `small_model`.
-
-`model` and OpenCode's `small_model` must use the `provider/model` format. `model` is optional and explicitly overrides OpenCode's global `small_model`. Configure `small_model` in `opencode.json` when no override is provided. `variant` is passed to translation requests. `lang` controls the assistant output language and the TUI badge.
-
-Inline options remain available when needed:
+Inline options remain supported, but using the shared file avoids server and TUI configuration drift:
 
 ```jsonc
 {
@@ -140,84 +153,80 @@ Inline options remain available when needed:
 }
 ```
 
-Do not duplicate these options in both `opencode.json` and `tui.json` when using `translate.json`.
+The translation model is selected in this order:
 
-Runtime flow:
+1. `model` from inline options or `translate.json`.
+2. OpenCode's global `small_model`.
 
-1. The user writes in `lang`.
-2. User text is translated to English before the main model request.
-3. The model receives English and responds in English.
+Both model values must use the `provider/model` format. Configure `small_model` in `opencode.json` when an explicit plugin `model` is not needed.
+
+## Runtime behavior
+
+1. The user writes a prompt in the configured language.
+2. The plugin translates the model-facing user text to English.
+3. The main model receives English and responds in English.
 4. Completed assistant `TextPart` content is translated to `lang` for display.
 
-Input translation changes only the model-facing message, so visible user history keeps the original text. `input` currently supports only `show original`; OpenCode exposes model-message transformation, not independent persisted-history rendering.
+Input translation changes only the model-facing message, so visible user history keeps the original text. Tool calls, tool arguments, tool output, reasoning, code, paths, URLs, commands, diffs, and errors are not translated. Native `question` and permission prompts remain English because the current plugin API does not expose a safe mutable display hook for them.
 
-`output` supports three modes:
+Each translation uses a temporary internal session with the selected model. Sessions are deleted after use, and repeated text is cached for the current plugin instance. Translation sessions are excluded from the main session token count but still incur provider cost.
 
-- `show original`: display only the English assistant text.
-- `show translation`: display the English original, then a separator and the localized translation.
-- `show original + translation`: display the English original, separator, `[Translation]`, and the localized translation.
+If configuration lookup, session creation, translation, response parsing, or cleanup fails, the original content remains unchanged and the failure is logged without breaking the main request.
 
-The translation-inclusive modes currently render this format:
+## TUI controls
+
+Use `/translate` from the command palette or press `Ctrl+Shift+T`. The prompt badge shows the current state, for example:
 
 ```text
-English original
-
-----------------------------------------
-[Translation]
-Localized translation
+[translate: on -> Spanish]
 ```
 
-The English original is intentionally retained because hiding it can break future model context with the current OpenCode API.
+The TUI reads persisted KV state first. Without a stored value, it uses `enabled` from `translate.json`. Startup publishes the initial state to the server without showing a toast. User-triggered toggles update KV, update the badge, show a toast, and publish the state. If publishing fails, the local state is rolled back.
 
-## TUI Controls
+## Local development
 
-```jsonc
-// ~/.config/opencode/tui.json, only needed for a separate local/file setup
-{
-  "$schema": "https://opencode.ai/tui.json",
-  "plugin": ["opencode-auto-translate@latest"],
-}
-```
-
-With the normal package installation, OpenCode resolves the TUI target automatically. Use Ctrl+P, `/translate`, or Ctrl+Shift+T to toggle translation. The prompt badge shows the current state, for example `[translate: on -> Spanish]`.
-
-The TUI reads persisted KV state first. If no KV state exists, it uses `enabled` from `translate.json`. During startup it publishes the initial state to the server without showing a toggle toast. User-triggered toggles update KV, update the badge, show a toast, and publish the state to the server. If a user-triggered publish fails, the local state is rolled back.
-
-The translation request uses a temporary internal session with the selected model. Temporary sessions are deleted after each request, and repeated text is cached for the current plugin instance. Translation sessions are excluded from the main session token count but still incur provider cost.
-
-Translation is fail-open: if configuration lookup, session creation, translation, response parsing, or cleanup fails, the original content remains unchanged and the failure is logged without breaking the main request.
-
-The system hook tells the main model to write assistant prose in English. Tool calls, tool arguments, tool outputs, reasoning, commands, paths, URLs, code, diffs, and errors remain unchanged. Native `question` prompts and permission prompts remain English because the current plugin API does not expose a safe mutable display hook for them.
-
-## Local Development
-
-Run `bun run build`, then configure the two file entrypoints directly:
-
-```jsonc
-// ~/.config/opencode/opencode.json
-{ "plugin": ["/absolute/path/to/opencode-auto-translate/dist/server.js"] }
-
-// ~/.config/opencode/tui.json
-{ "plugin": ["/absolute/path/to/opencode-auto-translate/dist/tui.js"] }
-```
-
-When using this file-entrypoint setup, `translate.json` is still shared by both runtimes. Restart OpenCode after changing `opencode.json`, `tui.json`, or plugin files because OpenCode loads configuration and plugins at startup.
-
-## Publishing
-
-Releases are published to npm by GitHub Actions when a GitHub Release is published. The release tag must match the package version, for example `v0.1.0` for version `0.1.0`.
-
-The first npm publication must be performed manually. After the package exists, configure npm Trusted Publishing for `dogalyir/opencode-auto-translate` using workflow `publish.yml` and GitHub environment `npm`. Subsequent releases only require updating `version`, merging to `main`, and publishing the matching GitHub Release.
-
-CI runs TypeScript typechecking, Bun tests, Oxlint, jscpd, Knip, Fallow dead-code and duplication analysis, the build, and an advisory Fallow health analysis.
-
-## Development
+Install dependencies and run the complete verification gate:
 
 ```bash
 bun install
 bun run check:all
 ```
 
-`check:all` runs typechecking, tests, Oxlint, duplicate detection, Knip, Fallow, and the production build. The TUI build keeps `solid-js` external so it uses the host OpenTUI Solid runtime rather than bundling a second Solid runtime. Git hooks are installed by `bun run prepare`: staged TypeScript files are linted before commits, and the complete `check:all` pipeline runs before pushes.
+The build performs two tasks:
 
-The test suite covers model parsing, translatable-part filtering, prompt construction, display modes and separators, shared configuration precedence, server translation hooks, fail-open behavior, and TUI toggle registration.
+1. Generates `dist/translate.schema.json` from `pluginOptionsSchema`.
+2. Builds `dist/server.js` and `dist/tui.js`.
+
+To load a local build directly:
+
+```bash
+bun run build
+```
+
+```jsonc
+// ~/.config/opencode/opencode.json
+{
+  "plugin": ["/absolute/path/to/opencode-auto-translate/dist/server.js"],
+}
+```
+
+```jsonc
+// ~/.config/opencode/tui.json
+{
+  "plugin": ["/absolute/path/to/opencode-auto-translate/dist/tui.js"],
+}
+```
+
+The local build uses the same shared `translate.json`. Restart OpenCode after changing plugin files or OpenCode configuration because plugins and configuration are loaded at startup.
+
+`check:all` runs TypeScript typechecking, Bun tests, Oxlint, duplicate detection, Knip, Fallow analysis, and the production build. Git hooks lint staged TypeScript files before commits and run `check:all` before pushes.
+
+## Publishing
+
+GitHub Actions publishes releases to npm when a GitHub Release is published. The release tag must match the package version, such as `v0.1.0` for version `0.1.0`.
+
+The first npm publication must be performed manually. After the package exists, configure npm Trusted Publishing for `dogalyir/opencode-auto-translate` with workflow `publish.yml` and the GitHub `npm` environment. Later releases require updating `version`, merging to `main`, and publishing the matching GitHub Release.
+
+## License
+
+MIT
