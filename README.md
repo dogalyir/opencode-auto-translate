@@ -12,6 +12,7 @@ An OpenCode plugin that translates user prompts to English before they reach the
 - Translate user prompts to English before the main model request.
 - Translate completed assistant prose to the configured language.
 - Preserve tool calls, tool arguments, tool output, reasoning, code, paths, URLs, commands, diffs, and errors.
+- Localize `question` tool prompts and restore their answers to English for the model.
 - Toggle translation with `/translate` or `Ctrl+Shift+T`.
 - Show the current state and language in the TUI prompt badge.
 - Use an explicit translation model or OpenCode's global `small_model`.
@@ -35,7 +36,7 @@ For a guided global setup, run:
 npx opencode-auto-translate
 ```
 
-The installer registers the server and TUI plugin in `opencode.json` and `tui.json`, then creates `translate.json`. It preserves existing JSON settings and refuses to modify an invalid or unsupported configuration file. Restart OpenCode after setup.
+The installer registers the server and TUI plugin in `opencode.json` and `tui.json`, then creates or replaces `translate.json`. It preserves existing JSON settings in the two plugin files and refuses to modify an invalid or unsupported configuration file. Restart OpenCode after setup.
 
 Install the package through OpenCode:
 
@@ -179,7 +180,7 @@ Both model values must use the `provider/model` format. Configure `small_model` 
 3. The main model receives English and responds in English.
 4. Completed assistant `TextPart` content is translated to `lang` for display.
 
-Input translation changes only the model-facing message, so visible user history keeps the original text. Tool calls, tool arguments, tool output, reasoning, code, paths, URLs, commands, diffs, and errors are not translated. Native `question` and permission prompts remain English because the current plugin API does not expose a safe mutable display hook for them.
+Input translation changes only the model-facing message, so visible user history keeps the original text. Tool calls, tool arguments, tool output, reasoning, code, paths, URLs, commands, diffs, and errors are not translated. `question` tool prompts are localized before display, and their selected answers are restored to English before the model receives them. Permission prompts remain English because the current plugin API does not expose a safe mutable display hook for them.
 
 Each translation uses the configured provider directly, and repeated text is cached for the current plugin instance. Direct requests still incur provider cost.
 
