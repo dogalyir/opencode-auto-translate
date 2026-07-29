@@ -19,6 +19,8 @@ An OpenCode plugin that translates user prompts to English before they reach the
 - Persist the toggle state through OpenCode KV.
 - Fail open: translation failures never replace the original content with an error.
 
+Translation uses a direct provider API rather than an OpenCode agent session, so it does not create temporary Web sessions or inherit MCP/tool capabilities. For now, this is limited to providers offering OpenAI-compatible endpoints; providers with other protocols or OAuth-only authentication are unsupported. We are waiting for [anomalyco/opencode#39243](https://github.com/anomalyco/opencode/issues/39243) to improve the integration. See [the direct API design note](docs/direct-api.md) for details.
+
 ## Compatibility
 
 - OpenCode `>=1.18.5`
@@ -99,7 +101,8 @@ Only the global file is read. Project-level `translate.json` files are ignored.
   "variant": "minimal",
   "lang": "Spanish",
   "input": "show original",
-  "output": "show translation"
+  "output": "show translation",
+  "excluded_agents": ["general"]
 }
 ```
 
@@ -107,14 +110,15 @@ The published schema is generated from the same Zod schema used by both runtimes
 
 ### Options
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `enabled` | boolean | unset | Initial translation state used when no persisted TUI state exists. |
-| `model` | string | unset | Translation model in `provider/model` format. Overrides OpenCode's `small_model`. |
-| `variant` | string | unset | Optional provider-specific model variant. |
-| `lang` | string | `English` | Target language for assistant translations and the TUI badge. |
-| `input` | enum | `show original` | User-prompt display mode. Currently only `show original` is supported by OpenCode's transform API. |
-| `output` | enum | `show original` | Assistant display mode. |
+| Option            | Type     | Default         | Description                                                                                                          |
+| ----------------- | -------- | --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `enabled`         | boolean  | unset           | Initial translation state used when no persisted TUI state exists.                                                   |
+| `model`           | string   | unset           | Translation model in `provider/model` format. Overrides OpenCode's `small_model`.                                    |
+| `variant`         | string   | unset           | Optional provider-specific model variant.                                                                            |
+| `lang`            | string   | `English`       | Target language for assistant translations and the TUI badge.                                                        |
+| `input`           | enum     | `show original` | User-prompt display mode. Currently only `show original` is supported by OpenCode's transform API.                   |
+| `output`          | enum     | `show original` | Assistant display mode.                                                                                              |
+| `excluded_agents` | string[] | `[]`            | Agent and sub-agent names that bypass all plugin behavior, including translation and the English system instruction. |
 
 Valid `output` values are:
 
@@ -177,9 +181,9 @@ Both model values must use the `provider/model` format. Configure `small_model` 
 
 Input translation changes only the model-facing message, so visible user history keeps the original text. Tool calls, tool arguments, tool output, reasoning, code, paths, URLs, commands, diffs, and errors are not translated. Native `question` and permission prompts remain English because the current plugin API does not expose a safe mutable display hook for them.
 
-Each translation uses a temporary internal session with the selected model. Sessions are deleted after use, and repeated text is cached for the current plugin instance. Translation sessions are excluded from the main session token count but still incur provider cost.
+Each translation uses the configured provider directly, and repeated text is cached for the current plugin instance. Direct requests still incur provider cost.
 
-If configuration lookup, session creation, translation, response parsing, or cleanup fails, the original content remains unchanged and the failure is logged without breaking the main request.
+If configuration lookup, provider discovery, direct translation, response parsing, or authentication fails, the original content remains unchanged and the failure is logged without breaking the main request.
 
 Response display is idempotent: if multiple server plugin instances receive the same completed text, an existing canonical translation block is left unchanged. If duplicate output persists, run `opencode debug info` and remove mixed registrations such as both a local `dist/server.js` path and `opencode-auto-translate@latest`. The server and TUI registrations are separate runtimes; registering the TUI entrypoint does not translate server responses.
 
