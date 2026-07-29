@@ -39,7 +39,7 @@
   },
   "scripts": {
     "generate:schema": "bun scripts/generate-schema.ts",
-    "build": "bun run generate:schema && bun build src/server.ts src/tui.tsx src/cli.ts --outdir dist --target node --external '@opentui/*' --external 'solid-js'",
+    "build": "bun run generate:schema && bun build src/server.ts src/tui.tsx src/cli.ts --outdir dist --target node --minify --external '@opentui/*' --external 'solid-js'",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "lint": "bunx oxfmt --check src test && bunx oxlint src test",
