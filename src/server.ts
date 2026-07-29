@@ -58,6 +58,18 @@ function parseMessages(value: unknown): MessageList | undefined {
   return parsed.data;
 }
 
+function parseQuestionArgsTranslation(value: string): QuestionArgs | undefined {
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+  const parsed = questionArgsSchema.safeParse(decoded);
+  if (!parsed.success) return undefined;
+  return parsed.data;
+}
+
 const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
   const pluginOptions = await loadPluginOptions(options);
   let enabled = pluginOptions.enabled === true;
@@ -209,9 +221,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
       "from-english",
     );
     if (translated === undefined) return undefined;
-    const parsed = questionArgsSchema.safeParse(JSON.parse(translated));
-    if (!parsed.success) return undefined;
-    return parsed.data;
+    return parseQuestionArgsTranslation(translated);
   }
 
   async function restoreQuestionResult(

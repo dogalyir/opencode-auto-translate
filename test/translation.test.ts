@@ -16,6 +16,31 @@ import {
 
 const serverModule = await import("../src/server");
 
+const createQuestionArgs = () => ({
+  questions: [{
+    question: "Which mode?",
+    header: "Mode",
+    options: [{ label: "Full", description: "Install everything" }],
+  }],
+});
+
+function expectQuestion(args: ReturnType<typeof createQuestionArgs>, question: string, label: string): void {
+  expect(args.questions[0]?.question).toBe(question);
+  expect(args.questions[0]?.options[0]?.label).toBe(label);
+}
+
+async function runQuestionBefore(
+  before: (...args: never[]) => unknown,
+  plugin: unknown,
+  args: ReturnType<typeof createQuestionArgs>,
+  callID: string,
+): Promise<void> {
+  await Reflect.apply(before, plugin, [
+    { tool: "question", sessionID: "session", callID },
+    { args },
+  ]);
+}
+
 function getPluginFactory(): (...args: never[]) => unknown {
   const pluginDescriptor = Object.getOwnPropertyDescriptor(serverModule, "default");
   if (pluginDescriptor === undefined) throw new Error("Missing plugin factory");
@@ -234,18 +259,19 @@ test("plugin replaces the original message with the translation", async () => {
 
 test("plugin translates question dialogs before display and restores option labels", async () => {
   const createPlugin = getPluginFactory();
+  let translatedQuestion = JSON.stringify({
+    questions: [{
+      question: "¿Qué modo?",
+      header: "Modo",
+      options: [{ label: "Completo", description: "Instala todo" }],
+    }],
+  });
   const client = createTranslationClient(async () => {
       return {
         data: {
           parts: [{
             type: "text",
-            text: JSON.stringify({
-              questions: [{
-                question: "¿Qué modo?",
-                header: "Modo",
-                options: [{ label: "Completo", description: "Instala todo" }],
-              }],
-            }),
+            text: translatedQuestion,
           }],
         },
       };
@@ -259,19 +285,9 @@ test("plugin translates question dialogs before display and restores option labe
   const after = Reflect.get(plugin, "tool.execute.after");
   if (typeof before !== "function" || typeof after !== "function") throw new Error("Missing tool hooks");
 
-  const args = {
-    questions: [{
-      question: "Which mode?",
-      header: "Mode",
-      options: [{ label: "Full", description: "Install everything" }],
-    }],
-  };
-  await Reflect.apply(before, plugin, [
-    { tool: "question", sessionID: "session", callID: "call" },
-    { args },
-  ]);
-  expect(args.questions[0]?.question).toBe("¿Qué modo?");
-  expect(args.questions[0]?.options[0]?.label).toBe("Completo");
+  const args = createQuestionArgs();
+  await runQuestionBefore(before, plugin, args, "call");
+  expectQuestion(args, "¿Qué modo?", "Completo");
 
   const output = {
     output: 'User has answered your questions: "¿Qué modo?"="Completo"',
@@ -283,6 +299,11 @@ test("plugin translates question dialogs before display and restores option labe
   ]);
   expect(output.output).toContain('"Which mode?"="Full"');
   expect(output.metadata).toEqual({ answers: [["Full"]] });
+
+  translatedQuestion = "not valid JSON";
+  const malformedArgs = createQuestionArgs();
+  await runQuestionBefore(before, plugin, malformedArgs, "malformed");
+  expectQuestion(malformedArgs, "Which mode?", "Full");
 });
 
 test("plugin does not append duplicate translations for concurrent completion hooks", async () => {
