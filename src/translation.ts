@@ -28,31 +28,20 @@ export const pluginOptionsSchema = z
       .min(1)
       .optional()
       .meta({ description: "Optional provider-specific model variant." }),
-    lang: z
-      .string()
-      .trim()
-      .min(1)
-      .default("English")
-      .meta({
-        description: "Language used for translating assistant responses.",
-      }),
+    lang: z.string().trim().min(1).default("English").meta({
+      description: "Language used for translating assistant responses.",
+    }),
     input: z
       .enum(DISPLAY_MODES)
       .default("show original")
       .meta({ description: "How translated user prompts are displayed." }),
-    output: z
-      .enum(DISPLAY_MODES)
-      .default("show original")
-      .meta({
-        description: "How translated assistant responses are displayed.",
-      }),
-    excluded_agents: z
-      .array(z.string().trim().min(1))
-      .default([])
-      .meta({
-        description:
-          "Agents and sub-agents excluded from all translation behavior.",
-      }),
+    output: z.enum(DISPLAY_MODES).default("show original").meta({
+      description: "How translated assistant responses are displayed.",
+    }),
+    excluded_agents: z.array(z.string().trim().min(1)).default([]).meta({
+      description:
+        "Agents and sub-agents excluded from all translation behavior.",
+    }),
   })
   .meta({
     title: "OpenCode Auto Translate configuration",
