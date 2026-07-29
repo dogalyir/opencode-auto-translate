@@ -20,6 +20,9 @@
   "homepage": "https://github.com/dogalyir/opencode-auto-translate#readme",
   "module": "./dist/server.js",
   "main": "./dist/server.js",
+  "bin": {
+    "opencode-auto-translate": "./dist/cli.js"
+  },
   "type": "module",
   "files": [
     "dist",
@@ -39,7 +42,7 @@
   },
   "scripts": {
     "generate:schema": "bun scripts/generate-schema.ts",
-    "build": "bun run generate:schema && bun build src/server.ts src/tui.tsx --outdir dist --target bun --external '@opentui/*' --external 'solid-js'",
+    "build": "bun run generate:schema && bun build src/server.ts src/tui.tsx src/cli.ts --outdir dist --target node --external '@opentui/*' --external 'solid-js'",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "lint": "bunx oxlint src test",
