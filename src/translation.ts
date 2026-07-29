@@ -4,6 +4,7 @@ export const TRANSLATION_ID = "opencode-auto-translate";
 export const TRANSLATION_EVENT = `${TRANSLATION_ID}.toggle`;
 const DISPLAY_MODES = ["show original", "show translation", "show original + translation"] as const;
 const TRANSLATION_SEPARATOR = "----------------------------------------";
+const TRANSLATION_MARKER = `${TRANSLATION_SEPARATOR}\n[Translation]\n`;
 export const TRANSLATION_AGENT = "general";
 export const TRANSLATION_MODEL_INSTRUCTION =
   "You are a precise translation engine. Translate text only.";
@@ -88,9 +89,11 @@ export function displayTranslation(
   mode: PluginOptions["output"],
 ): string {
   if (mode === "show original") return original;
-  if (mode === "show translation")
-    return `${original}\n\n${TRANSLATION_SEPARATOR}\n[Translation]\n${translated}`;
-  return `${original}\n\n${TRANSLATION_SEPARATOR}\n[Translation]\n${translated}`;
+  return `${original}\n\n${TRANSLATION_MARKER}${translated}`;
+}
+
+export function hasDisplayedTranslation(text: string): boolean {
+  return text.includes(`\n\n${TRANSLATION_MARKER}`);
 }
 
 export function parseToggleCommand(command: string): boolean | undefined {

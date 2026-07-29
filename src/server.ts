@@ -4,6 +4,7 @@ import { loadPluginOptions } from "./config";
 import {
   cleanTranslation,
   displayTranslation,
+  hasDisplayedTranslation,
   isTranslatablePart,
   parseModelRef,
   parseToggleCommand,
@@ -255,6 +256,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
 	    "experimental.text.complete": async (input, output) => {
 	      if (!enabled || internalSessions.has(input.sessionID)) return;
 	      if (pluginOptions.output === "show original") return;
+	      if (hasDisplayedTranslation(output.text)) return;
 	      if (
 	        translatedParts.has(input.partID) ||
 	        translatingParts.has(input.partID)
@@ -262,16 +264,18 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
 	        return;
 	      translatingParts.add(input.partID);
       try {
+	        const original = output.text;
 	        const model = await resolveModel();
-	        if (model === undefined || output.text.trim().length === 0) return;
+	        if (model === undefined || original.trim().length === 0) return;
 	        const translated = await getTranslation(
-	          output.text,
+	          original,
 	          model,
-	          `${model.providerID}/${model.modelID}:response:${input.partID}:${output.text}`,
-	          "from-english",
-	        );
-	        if (translated === undefined) return;
-	        output.text = displayTranslation(output.text, translated, pluginOptions.output);
+	          `${model.providerID}/${model.modelID}:response:${input.partID}:${original}`,
+          "from-english",
+        );
+        if (translated === undefined) return;
+	        if (output.text !== original || hasDisplayedTranslation(output.text)) return;
+        output.text = displayTranslation(original, translated, pluginOptions.output);
 	        translatedParts.add(input.partID);
 	      } finally {
 	        translatingParts.delete(input.partID);

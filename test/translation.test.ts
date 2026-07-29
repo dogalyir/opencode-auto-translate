@@ -11,6 +11,7 @@ import {
   parseToggleCommand,
   translationPrompt,
   displayTranslation,
+  hasDisplayedTranslation,
 } from "../src/translation";
 
 const serverModule = await import("../src/server");
@@ -21,6 +22,18 @@ function getPluginFactory(): (...args: never[]) => unknown {
   const createPlugin = pluginDescriptor.value;
   if (typeof createPlugin !== "function") throw new Error("Missing plugin factory");
   return createPlugin;
+}
+
+function createTranslationClient(prompt: () => Promise<unknown>) {
+  return {
+    app: { log: async () => ({}) },
+    config: { get: async () => ({ data: { small_model: "openai/model" } }) },
+    session: {
+      create: async () => ({ data: { id: "translation-session" } }),
+      prompt,
+      delete: async () => ({}),
+    },
+  };
 }
 
 test("server entrypoint exports only the plugin factory", () => {
@@ -89,6 +102,12 @@ test("display modes preserve English context", () => {
   expect(displayTranslation("Hello", "Hola", "show original + translation")).toBe(
     "Hello\n\n----------------------------------------\n[Translation]\nHola",
   );
+});
+
+test("detects the canonical displayed translation block", () => {
+  const displayed = displayTranslation("Hello", "Hola", "show translation");
+  expect(hasDisplayedTranslation(displayed)).toBe(true);
+  expect(hasDisplayedTranslation("Hello\n\n----------------------------------------\n[Other]\nHola")).toBe(false);
 });
 
 test("plugin options provide strict defaults and accept model display settings", () => {
@@ -219,18 +238,10 @@ test("plugin does not append duplicate translations for concurrent completion ho
   const translationStarted = new Promise<void>((resolve) => {
     releaseTranslation = resolve;
   });
-  const client = {
-    app: { log: async () => ({}) },
-    config: { get: async () => ({ data: { small_model: "openai/model" } }) },
-    session: {
-      create: async () => ({ data: { id: "translation-session" } }),
-      prompt: async () => {
-        await translationStarted;
-        return { data: { parts: [{ type: "text", text: "hola" }] } };
-      },
-      delete: async () => ({}),
-    },
-  };
+  const client = createTranslationClient(async () => {
+    await translationStarted;
+    return { data: { parts: [{ type: "text", text: "hola" }] } };
+  });
   const plugin = await Reflect.apply(createPlugin, undefined, [
     { client, directory: "/tmp" },
     { enabled: true, output: "show translation", lang: "Spanish" },
@@ -250,6 +261,34 @@ test("plugin does not append duplicate translations for concurrent completion ho
 
   expect(firstResponse.text).toBe("hello\n\n----------------------------------------\n[Translation]\nhola");
   expect(secondResponse.text).toBe("hello");
+});
+
+test("plugin instances do not append duplicate response translations", async () => {
+  const createPlugin = getPluginFactory();
+  const client = createTranslationClient(async () => ({
+    data: { parts: [{ type: "text", text: "hola" }] },
+  }));
+  const firstPlugin = await Reflect.apply(createPlugin, undefined, [
+    { client, directory: "/tmp" },
+    { enabled: true, output: "show translation", lang: "Spanish" },
+  ]);
+  const secondPlugin = await Reflect.apply(createPlugin, undefined, [
+    { client, directory: "/tmp" },
+    { enabled: true, output: "show translation", lang: "Spanish" },
+  ]);
+  if (firstPlugin === null || typeof firstPlugin !== "object") throw new Error("Invalid first plugin");
+  if (secondPlugin === null || typeof secondPlugin !== "object") throw new Error("Invalid second plugin");
+  const firstTransform = Reflect.get(firstPlugin, "experimental.text.complete");
+  const secondTransform = Reflect.get(secondPlugin, "experimental.text.complete");
+  if (typeof firstTransform !== "function" || typeof secondTransform !== "function")
+    throw new Error("Missing text transform");
+
+  const response = { text: "hello" };
+  const input = { sessionID: "user-session", partID: "response-part" };
+  await Reflect.apply(firstTransform, firstPlugin, [input, response]);
+  await Reflect.apply(secondTransform, secondPlugin, [input, response]);
+
+  expect(response.text).toBe("hello\n\n----------------------------------------\n[Translation]\nhola");
 });
 
 test("translation hooks fail open when configuration response is malformed", async () => {
