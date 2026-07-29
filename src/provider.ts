@@ -51,10 +51,7 @@ export function createDirectTranslator(
       });
       return undefined;
     }
-    if (
-      providerResponse.error !== undefined ||
-      providerResponse.data === undefined
-    ) {
+    if (providerResponse.error !== undefined || providerResponse.data === undefined) {
       await log("warn", "Provider metadata was unavailable", {
         provider: model.providerID,
       });
@@ -67,9 +64,7 @@ export function createDirectTranslator(
       });
       return undefined;
     }
-    const provider = parsedProviders.data.all.find(
-      (item) => item.id === model.providerID,
-    );
+    const provider = parsedProviders.data.all.find((item) => item.id === model.providerID);
     if (provider === undefined) {
       await log("warn", "Configured translation provider was not found", {
         provider: model.providerID,
@@ -81,8 +76,7 @@ export function createDirectTranslator(
     const modelApi = modelInfo === undefined ? undefined : modelInfo.api;
     const providerBaseURL = providerOptions[PROVIDER_BASE_URL_KEY];
     const modelURL = modelApi === undefined ? undefined : modelApi.url;
-    const providerURL =
-      typeof providerBaseURL === "string" ? providerBaseURL : modelURL;
+    const providerURL = typeof providerBaseURL === "string" ? providerBaseURL : modelURL;
     if (providerURL === undefined || providerURL.trim().length === 0) {
       await log("warn", "Translation provider has no usable endpoint", {
         provider: model.providerID,
@@ -93,15 +87,12 @@ export function createDirectTranslator(
     const endpoint = normalizedURL.endsWith(CHAT_COMPLETIONS_PATH)
       ? normalizedURL
       : `${normalizedURL}${CHAT_COMPLETIONS_PATH}`;
-    const configuredKey =
-      provider.key === undefined ? undefined : provider.key.trim();
+    const configuredKey = provider.key === undefined ? undefined : provider.key.trim();
     const environmentKey = provider.env
       .map((name) => process.env[name])
       .find((value) => value !== undefined && value.trim().length > 0);
     const apiKey =
-      configuredKey === undefined ||
-      configuredKey === "" ||
-      configuredKey === OAUTH_DUMMY_KEY
+      configuredKey === undefined || configuredKey === "" || configuredKey === OAUTH_DUMMY_KEY
         ? environmentKey
         : configuredKey;
     const headers = new Headers({ "Content-Type": "application/json" });
@@ -113,11 +104,9 @@ export function createDirectTranslator(
         if (typeof value === "string") headers.set(name, value);
       }
     }
-    const modelHeaders =
-      modelInfo === undefined ? undefined : modelInfo.headers;
+    const modelHeaders = modelInfo === undefined ? undefined : modelInfo.headers;
     if (modelHeaders !== undefined) {
-      for (const [name, value] of Object.entries(modelHeaders))
-        headers.set(name, value);
+      for (const [name, value] of Object.entries(modelHeaders)) headers.set(name, value);
     }
     const modelAPIId = modelApi === undefined ? undefined : modelApi.id;
     const modelID = modelInfo === undefined ? undefined : modelInfo.id;

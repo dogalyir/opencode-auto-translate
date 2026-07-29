@@ -16,9 +16,7 @@ async function askRequired(prompt: string, fallback: string): Promise<string> {
 }
 
 async function promptInput(prompt: string, fallback: string): Promise<string> {
-  const answer = await promptInputInterface.question(
-    `${prompt} [${fallback}] `,
-  );
+  const answer = await promptInputInterface.question(`${prompt} [${fallback}] `);
   return answer.trim().length > 0 ? answer : fallback;
 }
 
@@ -28,22 +26,11 @@ async function main(): Promise<void> {
   try {
     console.log("OpenCode Auto Translate setup\n");
     const lang = await askRequired("Target language", "English");
-    const model = await promptInput(
-      "Translation model (leave blank to use small_model)",
-      "",
-    );
-    const variant = await promptInput(
-      "Model variant (leave blank for none)",
-      "",
-    );
+    const model = await promptInput("Translation model (leave blank to use small_model)", "");
+    const variant = await promptInput("Model variant (leave blank for none)", "");
     const enabled =
-      (
-        await promptInput("Enable translation at startup? (y/n)", "y")
-      ).toLowerCase() !== "n";
-    const outputMode = await promptInput(
-      "Output mode (original/translation/both)",
-      "translation",
-    );
+      (await promptInput("Enable translation at startup? (y/n)", "y")).toLowerCase() !== "n";
+    const outputMode = await promptInput("Output mode (original/translation/both)", "translation");
     let output: InstallerOptions["output"] = "show translation";
     if (outputMode === "original") output = "show original";
     if (outputMode === "both") output = "show original + translation";
@@ -73,10 +60,7 @@ async function main(): Promise<void> {
       }
       await writeFile(filePath, registerPlugin(current, filePath));
     }
-    await writeFile(
-      join(configDirectory, "translate.json"),
-      createTranslationConfig(options),
-    );
+    await writeFile(join(configDirectory, "translate.json"), createTranslationConfig(options));
     console.log(
       `\nConfigured OpenCode in ${configDirectory}. Restart OpenCode to load the plugin.`,
     );

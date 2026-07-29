@@ -1,13 +1,9 @@
 import { z } from "zod";
 
-export const configResponseSchema = z
-  .object({ small_model: z.unknown().optional() })
-  .passthrough();
+export const configResponseSchema = z.object({ small_model: z.unknown().optional() }).passthrough();
 const providerModelSchema = z.object({
   id: z.string().optional(),
-  api: z
-    .object({ id: z.string().optional(), url: z.string().optional() })
-    .optional(),
+  api: z.object({ id: z.string().optional(), url: z.string().optional() }).optional(),
   headers: z.record(z.string(), z.string()).optional(),
   options: z.record(z.string(), z.unknown()).optional(),
 });

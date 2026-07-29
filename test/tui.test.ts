@@ -12,25 +12,18 @@ function createTuiApi(storedValue: unknown) {
     ui: { toast: () => undefined },
     client: {
       tui: {
-        publish: async ({
-          body,
-        }: {
-          body: { properties: { command: string } };
-        }) => {
+        publish: async ({ body }: { body: { properties: { command: string } } }) => {
           published.push(body.properties.command);
           return {};
         },
       },
     },
     keymap: {
-      registerLayer: (layer: {
-        commands?: Array<{ run?: () => Promise<void> }>;
-      }) => layers.push(layer),
+      registerLayer: (layer: { commands?: Array<{ run?: () => Promise<void> }> }) =>
+        layers.push(layer),
     },
     slots: {
-      register: (registration: {
-        slots: { session_prompt_right: () => unknown };
-      }) => {
+      register: (registration: { slots: { session_prompt_right: () => unknown } }) => {
         slotRenderer = registration.slots.session_prompt_right;
       },
     },
@@ -47,8 +40,7 @@ test("TUI initializes with invalid options and uses the safe language fallback",
   if (firstLayer === undefined || firstLayer.commands === undefined)
     throw new Error("Missing command layer");
   const command = firstLayer.commands[0];
-  if (command === undefined || command.run === undefined)
-    throw new Error("Missing toggle command");
+  if (command === undefined || command.run === undefined) throw new Error("Missing toggle command");
   expect(typeof command.run).toBe("function");
   const publishPromise = command.run();
   await publishPromise;
@@ -64,11 +56,7 @@ test("TUI initializes with invalid options and uses the safe language fallback",
 test("TUI uses the configured enabled state when no toggle state is persisted", async () => {
   const { api, published } = createTuiApi(undefined);
 
-  await Reflect.apply(tuiModule.default.tui, undefined, [
-    api,
-    "/tmp",
-    { enabled: true },
-  ]);
+  await Reflect.apply(tuiModule.default.tui, undefined, [api, "/tmp", { enabled: true }]);
 
   expect(published).toEqual(["opencode-auto-translate.toggle:on"]);
 });

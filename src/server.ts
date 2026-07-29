@@ -1,11 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin";
 import { z } from "zod";
 import { loadPluginOptions } from "./config";
-import {
-  configResponseSchema,
-  messagesSchema,
-  questionAnswersSchema,
-} from "./schemas";
+import { configResponseSchema, messagesSchema, questionAnswersSchema } from "./schemas";
 import { createDirectTranslator } from "./provider";
 import type { MaybeUndefined } from "./types";
 import {
@@ -31,9 +27,7 @@ function parseMessages(value: unknown): MaybeUndefined<MessageList> {
   return parsed.data;
 }
 
-function parseQuestionArgsTranslation(
-  value: string,
-): MaybeUndefined<QuestionArgs> {
+function parseQuestionArgsTranslation(value: string): MaybeUndefined<QuestionArgs> {
   let decoded: unknown;
   try {
     decoded = JSON.parse(value);
@@ -60,11 +54,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     return agent !== undefined && pluginOptions.excluded_agents.includes(agent);
   }
 
-  async function log(
-    level: "warn" | "error",
-    message: string,
-    extra?: Record<string, unknown>,
-  ) {
+  async function log(level: "warn" | "error", message: string, extra?: Record<string, unknown>) {
     try {
       await client.app.log({
         body: { service: TRANSLATION_ID, level, message, extra },
@@ -142,35 +132,22 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     return parseQuestionArgsTranslation(translated);
   }
 
-  async function restoreQuestionResult(
-    callID: string,
-    output: ToolOutput,
-  ): Promise<void> {
+  async function restoreQuestionResult(callID: string, output: ToolOutput): Promise<void> {
     const translation = questionTranslations.get(callID);
     questionTranslations.delete(callID);
     if (translation === undefined) return;
 
-    for (const [
-      index,
-      originalQuestion,
-    ] of translation.original.questions.entries()) {
+    for (const [index, originalQuestion] of translation.original.questions.entries()) {
       const localizedQuestion = translation.localized.questions[index];
       if (localizedQuestion === undefined) continue;
       output.output = output.output
         .split(localizedQuestion.question)
         .join(originalQuestion.question);
-      output.output = output.output
-        .split(localizedQuestion.header)
-        .join(originalQuestion.header);
-      for (const [
-        optionIndex,
-        originalOption,
-      ] of originalQuestion.options.entries()) {
+      output.output = output.output.split(localizedQuestion.header).join(originalQuestion.header);
+      for (const [optionIndex, originalOption] of originalQuestion.options.entries()) {
         const localizedOption = localizedQuestion.options[optionIndex];
         if (localizedOption === undefined) continue;
-        output.output = output.output
-          .split(localizedOption.label)
-          .join(originalOption.label);
+        output.output = output.output.split(localizedOption.label).join(originalOption.label);
         output.output = output.output
           .split(localizedOption.description)
           .join(originalOption.description);
@@ -193,9 +170,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
             );
             if (optionIndex >= 0) {
               const originalOption = originalQuestion.options[optionIndex];
-              return originalOption === undefined
-                ? answer
-                : originalOption.label;
+              return originalOption === undefined ? answer : originalOption.label;
             }
             if (model === undefined || answer === "Unanswered") return answer;
             return (
@@ -213,25 +188,18 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     output.metadata = { ...parsedMetadata.data, answers };
   }
 
-  function selectModel(
-    configuredSmallModel: unknown,
-  ): MaybeUndefined<ModelReference> {
+  function selectModel(configuredSmallModel: unknown): MaybeUndefined<ModelReference> {
     const configured = z.string().safeParse(configuredSmallModel);
-    const configuredReference = configured.success
-      ? parseModelRef(configured.data)
-      : undefined;
+    const configuredReference = configured.success ? parseModelRef(configured.data) : undefined;
     const pluginModel =
-      pluginOptions.model === undefined
-        ? undefined
-        : parseModelRef(pluginOptions.model);
+      pluginOptions.model === undefined ? undefined : parseModelRef(pluginOptions.model);
     return pluginModel ?? configuredReference;
   }
 
   async function resolveModel(): Promise<MaybeUndefined<ModelReference>> {
     try {
       const response = await client.config.get({ query: { directory } });
-      if (response.error !== undefined || response.data === undefined)
-        return undefined;
+      if (response.error !== undefined || response.data === undefined) return undefined;
       const parsedConfig = configResponseSchema.safeParse(response.data);
       if (!parsedConfig.success) return undefined;
       return selectModel(parsedConfig.data.small_model);
@@ -256,10 +224,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
       if (!enabled) return;
       const model = await resolveModel();
       if (model === undefined) {
-        await log(
-          "warn",
-          "Translation is enabled but small_model is not configured",
-        );
+        await log("warn", "Translation is enabled but small_model is not configured");
         return;
       }
       const messages = parseMessages(output.messages);
@@ -281,22 +246,13 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
       }
     },
     "tool.execute.before": async (input, output) => {
-      if (
-        !enabled ||
-        input.tool !== "question" ||
-        isExcludedSession(input.sessionID)
-      )
-        return;
+      if (!enabled || input.tool !== "question" || isExcludedSession(input.sessionID)) return;
       const parsed = questionArgsSchema.safeParse(output.args);
       if (!parsed.success) return;
       const model = await resolveModel();
       if (model === undefined) return;
       try {
-        const localized = await translateQuestionArgs(
-          parsed.data,
-          model,
-          input.callID,
-        );
+        const localized = await translateQuestionArgs(parsed.data, model, input.callID);
         if (localized !== undefined) {
           output.args.questions = localized.questions;
           questionTranslations.set(input.callID, {
@@ -325,11 +281,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
       if (!enabled || isExcludedSession(input.sessionID)) return;
       if (pluginOptions.output === "show original") return;
       if (hasDisplayedTranslation(output.text)) return;
-      if (
-        translatedParts.has(input.partID) ||
-        translatingParts.has(input.partID)
-      )
-        return;
+      if (translatedParts.has(input.partID) || translatingParts.has(input.partID)) return;
       translatingParts.add(input.partID);
       try {
         const original = output.text;
@@ -343,13 +295,8 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
           "from-english",
         );
         if (translated === undefined) return;
-        if (output.text !== original || hasDisplayedTranslation(output.text))
-          return;
-        output.text = displayTranslation(
-          original,
-          translated,
-          pluginOptions.output,
-        );
+        if (output.text !== original || hasDisplayedTranslation(output.text)) return;
+        output.text = displayTranslation(original, translated, pluginOptions.output);
         translatedParts.add(input.partID);
       } finally {
         translatingParts.delete(input.partID);
@@ -357,8 +304,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     },
     "experimental.chat.system.transform": async (_input, output) => {
       if (!enabled) return;
-      if (_input.sessionID !== undefined && isExcludedSession(_input.sessionID))
-        return;
+      if (_input.sessionID !== undefined && isExcludedSession(_input.sessionID)) return;
       output.system.push(
         [
           "Write all assistant prose in English. The translation plugin renders it in the user's configured language.",

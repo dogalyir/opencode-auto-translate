@@ -12,15 +12,9 @@ const tui: TuiPlugin = async (api, _directory, options) => {
   const language = pluginOptions.lang;
   const storedValue = api.kv.get<unknown>(KEY, undefined);
   const initialState =
-    typeof storedValue === "boolean"
-      ? storedValue
-      : pluginOptions.enabled === true;
+    typeof storedValue === "boolean" ? storedValue : pluginOptions.enabled === true;
   const [isEnabled, setEnabled] = createSignal(initialState);
-  const publish = async (
-    enabled: boolean,
-    showToast = true,
-    rollbackOnFailure = true,
-  ) => {
+  const publish = async (enabled: boolean, showToast = true, rollbackOnFailure = true) => {
     api.kv.set(KEY, enabled);
     setEnabled(enabled);
     if (showToast)
@@ -84,11 +78,7 @@ const tui: TuiPlugin = async (api, _directory, options) => {
   api.slots.register({
     slots: {
       session_prompt_right: () => (
-        <text>
-          {isEnabled()
-            ? ` [translate: on -> ${language}]`
-            : " [translate: off]"}
-        </text>
+        <text>{isEnabled() ? ` [translate: on -> ${language}]` : " [translate: off]"}</text>
       ),
     },
   });

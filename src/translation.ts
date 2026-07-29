@@ -3,11 +3,7 @@ import type { MaybeUndefined } from "./types";
 
 export const TRANSLATION_ID = "opencode-auto-translate";
 export const TRANSLATION_EVENT = `${TRANSLATION_ID}.toggle`;
-const DISPLAY_MODES = [
-  "show original",
-  "show translation",
-  "show original + translation",
-] as const;
+const DISPLAY_MODES = ["show original", "show translation", "show original + translation"] as const;
 const TRANSLATION_SEPARATOR = "----------------------------------------";
 const TRANSLATION_MARKER = `${TRANSLATION_SEPARATOR}\n[Translation]\n`;
 const TRANSLATION_SOURCE = "the source language";
@@ -39,8 +35,7 @@ export const pluginOptionsSchema = z
       description: "How translated assistant responses are displayed.",
     }),
     excluded_agents: z.array(z.string().trim().min(1)).default([]).meta({
-      description:
-        "Agents and sub-agents excluded from all translation behavior.",
+      description: "Agents and sub-agents excluded from all translation behavior.",
     }),
   })
   .meta({
@@ -94,8 +89,7 @@ export function parseModelRef(value: string): MaybeUndefined<ModelReference> {
 export function isTranslatablePart(value: unknown): value is TranslationPart {
   const parsed = translationPartSchema.safeParse(value);
   if (!parsed.success) return false;
-  if (parsed.data.synthetic === true || parsed.data.ignored === true)
-    return false;
+  if (parsed.data.synthetic === true || parsed.data.ignored === true) return false;
   return parsed.data.text.trim().length > 0;
 }
 
