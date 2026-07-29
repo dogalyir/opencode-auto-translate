@@ -274,8 +274,9 @@ test.serial("chat message stores original input with its English translation", a
 test("plugin options provide strict defaults and accept model display settings", () => {
   expect(pluginOptionsSchema.parse({})).toMatchObject({
     lang: "English",
-    input: "show original",
-    output: "show original",
+    input: "show original + translation",
+    output: "show original + translation",
+    excluded_agents: [],
   });
   expect(
     pluginOptionsSchema.parse({

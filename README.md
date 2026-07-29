@@ -20,7 +20,7 @@ An OpenCode plugin that translates user prompts to English before they reach the
 - Persist the toggle state through OpenCode KV.
 - Fail open: translation failures never replace the original content with an error.
 
-Translation uses a direct provider API rather than an OpenCode agent session, so it does not create temporary Web sessions or inherit MCP/tool capabilities. For now, this is limited to providers offering OpenAI-compatible endpoints; providers with other protocols or OAuth-only authentication are unsupported. We are waiting for [anomalyco/opencode#39243](https://github.com/anomalyco/opencode/issues/39243) to improve the integration. See [the direct API design note](docs/direct-api.md) for details.
+Translation uses temporary OpenCode sessions with a hidden internal translator agent. Each session has no tools, receives only the text being translated, and is deleted after the response. Provider authentication, protocol handling, and OAuth behavior are delegated to OpenCode. Temporary sessions may briefly appear in OpenCode's normal session machinery and incur its usual session overhead. See [the temporary translation session note](docs/direct-api.md) for details.
 
 ## Compatibility
 
@@ -115,10 +115,10 @@ The published schema is generated from the same Zod schema used by both runtimes
 | ----------------- | -------- | --------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `enabled`         | boolean  | unset           | Initial translation state used when no persisted TUI state exists.                                                   |
 | `model`           | string   | unset           | Translation model in `provider/model` format. Overrides OpenCode's `small_model`.                                    |
-| `variant`         | string   | unset           | Optional provider-specific model variant.                                                                            |
+| `variant`         | string   | unset           | Reserved optional provider-specific model variant. It is stored in configuration but is not currently passed to translation sessions. |
 | `lang`            | string   | `English`       | Target language for assistant translations and the TUI badge.                                                        |
-| `input`           | enum     | `show original` | User-prompt display mode.                                                                                              |
-| `output`          | enum     | `show original` | Assistant display mode.                                                                                              |
+| `input`           | enum     | `show original + translation` | User-prompt display mode.                                                                                   |
+| `output`          | enum     | `show original + translation` | Assistant display mode.                                                                                    |
 | `excluded_agents` | string[] | `[]`            | Agent and sub-agent names that bypass all plugin behavior, including translation and the English system instruction. |
 
 Valid `input` and `output` values are:
@@ -208,10 +208,10 @@ bun install
 bun run check:all
 ```
 
-The build performs two tasks:
+The build performs two tasks and produces three entrypoints:
 
 1. Generates `dist/translate.schema.json` from `pluginOptionsSchema`.
-2. Builds `dist/server.js` and `dist/tui.js`.
+2. Builds `dist/server.js`, `dist/tui.js`, and `dist/cli.js`.
 
 To load a local build directly:
 

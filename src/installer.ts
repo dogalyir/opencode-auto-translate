@@ -63,6 +63,7 @@ export function createTranslationConfig(options: InstallerOptions): string {
     lang: options.lang,
     input: options.input,
     output: options.output,
+    excluded_agents: [],
   };
   if (options.model !== undefined) config["model"] = options.model;
   if (options.variant !== undefined) config["variant"] = options.variant;

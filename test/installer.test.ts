@@ -49,5 +49,6 @@ test("creates the guided translation configuration", () => {
     model: "openai/model",
     input: "show original",
     output: "show original + translation",
+    excluded_agents: [],
   });
 });

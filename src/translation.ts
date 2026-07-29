@@ -30,9 +30,9 @@ export const pluginOptionsSchema = z
     }),
     input: z
       .enum(DISPLAY_MODES)
-      .default("show original")
+      .default("show original + translation")
       .meta({ description: "How translated user prompts are displayed." }),
-    output: z.enum(DISPLAY_MODES).default("show original").meta({
+    output: z.enum(DISPLAY_MODES).default("show original + translation").meta({
       description: "How translated assistant responses are displayed.",
     }),
     excluded_agents: z.array(z.string().trim().min(1)).default([]).meta({
