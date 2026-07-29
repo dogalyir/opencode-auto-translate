@@ -6,7 +6,7 @@ import {
   configResponseSchema,
   questionAnswersSchema,
 } from "./schemas";
-import { createDirectTranslator } from "./provider";
+import { createSessionTranslator, TRANSLATOR_AGENT } from "./provider";
 import type { MaybeUndefined, QuestionTranslation, ToolOutput } from "./types";
 import { parseMessages, parseQuestionArgsTranslation } from "./server-parsing";
 import {
@@ -30,6 +30,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
   const cache = new Map<string, string>();
   const inFlight = new Map<string, Promise<MaybeUndefined<string>>>();
   const translatingParts = new Set<string>();
+  const translatorSessions = new Set<string>();
   const translatedParts = new Set<string>();
   const questionTranslations = new Map<string, QuestionTranslation>();
   const sessionAgents = new Map<string, string>();
@@ -50,33 +51,12 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     }
   }
 
-  /*
-   * Translation deliberately does not use client.session.prompt(). That API
-   * is OpenCode's agent execution boundary: even when a caller supplies an
-   * empty `tools` object, OpenCode still resolves the selected agent and its
-   * normal system prompt, permissions, MCP integrations, title generation,
-   * events, and session persistence. In Web mode those temporary sessions
-   * become visible to the user, which is the opposite of this plugin's job.
-   *
-   * The direct request below is intentionally narrower than OpenCode's normal
-   * runtime. It uses the provider/model metadata already exposed by OpenCode,
-   * resolves an API key from the public provider listing or the provider's
-   * environment variables, and sends one OpenAI-compatible chat-completions
-   * request with only the translation prompt. It never reads auth.json, never
-   * implements OAuth refresh, never invokes an agent, and never sends tools or
-   * project context. This is a deliberate compatibility boundary: providers
-   * with non-OpenAI-compatible protocols or OAuth-only authentication fail
-   * open until OpenCode exposes a stateless provider-completion API.
-   *
-   * Keep this comment with the implementation. Replacing this transport with
-   * a session call would silently restore the agent/MCP behavior that prompted
-   * this design, especially for users running `opencode web`.
-   */
-  const directTranslate = createDirectTranslator(
-    () => client.provider.list({ query: { directory } }),
-    log,
+  const translate = createSessionTranslator(
+    client,
+    directory,
     pluginOptions.lang,
-    pluginOptions.variant,
+    log,
+    translatorSessions,
   );
 
   async function getTranslation(
@@ -89,7 +69,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     if (cached !== undefined) return cached;
     const pending = inFlight.get(key);
     if (pending !== undefined) return pending;
-    const request = directTranslate(text, model, direction);
+    const request = translate(text, model, direction);
     inFlight.set(key, request);
     let translated: MaybeUndefined<string>;
     try {
@@ -199,8 +179,21 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
   }
 
   return {
+    config: async (config) => {
+      const translatorAgent = {
+        hidden: true,
+        mode: "subagent",
+        prompt: "Translate the user's text only. Return only the translated text.",
+        tools: { "*": false },
+      } satisfies { hidden: boolean; mode: "subagent"; prompt: string; tools: { "*": boolean } };
+      config.agent = {
+        ...config.agent,
+        [TRANSLATOR_AGENT]: translatorAgent,
+      };
+    },
     "chat.message": async (input, output) => {
       if (!enabled || pluginOptions.input === "show original") return;
+      if (translatorSessions.has(input.sessionID)) return;
       if (isExcludedSession(input.sessionID)) return;
       const model = await resolveModel();
       if (model === undefined) return;
@@ -235,6 +228,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
       const messages = parseMessages(output.messages);
       if (messages === undefined) return;
       for (const [index, message] of messages.entries()) {
+        if (translatorSessions.has(message.info.sessionID)) continue;
         const outputMessage = output.messages[index];
         if (outputMessage === undefined) return;
         Object.assign(outputMessage, message);
@@ -266,7 +260,13 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
       }
     },
     "tool.execute.before": async (input, output) => {
-      if (!enabled || input.tool !== "question" || isExcludedSession(input.sessionID)) return;
+      if (
+        !enabled ||
+        input.tool !== "question" ||
+        translatorSessions.has(input.sessionID) ||
+        isExcludedSession(input.sessionID)
+      )
+        return;
       const parsed = questionArgsSchema.safeParse(output.args);
       if (!parsed.success) return;
       const model = await resolveModel();
@@ -288,6 +288,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     },
     "tool.execute.after": async (input, output) => {
       if (input.tool !== "question") return;
+      if (translatorSessions.has(input.sessionID)) return;
       try {
         await restoreQuestionResult(input.callID, output);
       } catch (error) {
@@ -298,7 +299,8 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
       }
     },
     "experimental.text.complete": async (input, output) => {
-      if (!enabled || isExcludedSession(input.sessionID)) return;
+      if (!enabled || translatorSessions.has(input.sessionID) || isExcludedSession(input.sessionID))
+        return;
       if (pluginOptions.output === "show original") return;
       if (hasDisplayedTranslation(output.text)) return;
       if (translatedParts.has(input.partID) || translatingParts.has(input.partID)) return;
@@ -324,7 +326,11 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     },
     "experimental.chat.system.transform": async (_input, output) => {
       if (!enabled) return;
-      if (_input.sessionID !== undefined && isExcludedSession(_input.sessionID)) return;
+      if (
+        _input.sessionID !== undefined &&
+        (translatorSessions.has(_input.sessionID) || isExcludedSession(_input.sessionID))
+      )
+        return;
       output.system.push(
         [
           "Write all assistant prose in English. The translation plugin renders it in the user's configured language.",

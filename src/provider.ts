@@ -1,9 +1,5 @@
 import { z } from "zod";
-import {
-  directTranslationResponseSchema,
-  providerListSchema,
-  providerResponseSchema,
-} from "./schemas";
+import { sessionPromptResponseSchema } from "./schemas";
 import {
   cleanTranslation,
   translationSystemPrompt,
@@ -12,152 +8,96 @@ import {
 } from "./translation";
 import type { MaybeUndefined } from "./types";
 
-const PROVIDER_BASE_URL_KEY = "baseURL";
-const PROVIDER_HEADERS_KEY = "headers";
-const CHAT_COMPLETIONS_PATH = "/chat/completions";
-const OAUTH_DUMMY_KEY = "opencode-oauth-dummy-key";
-const REQUEST_TIMEOUT_MS = 180_000;
-const providerOptionsSchema = z.record(z.string(), z.unknown());
+export const TRANSLATOR_AGENT = "opencode-auto-translate-internal";
 
-type ProviderResponse = z.infer<typeof providerResponseSchema>;
+type SessionClient = {
+  session: {
+    create: (options: {
+      query: { directory: string };
+      body: { title: string };
+    }) => Promise<unknown>;
+    prompt: (options: {
+      path: { id: string };
+      query: { directory: string };
+      body: {
+        agent: string;
+        model: ModelReference;
+        system: string;
+        tools: { "*": false };
+        parts: [{ type: "text"; text: string }];
+      };
+    }) => Promise<unknown>;
+    delete: (options: { path: { id: string }; query: { directory: string } }) => Promise<unknown>;
+  };
+};
 
-type ProviderLog = (
+type TranslatorLog = (
   level: "warn" | "error",
   message: string,
   extra?: Record<string, unknown>,
 ) => Promise<void>;
-type ProviderList = () => Promise<unknown>;
 
 function extractTranslation(value: unknown): MaybeUndefined<string> {
-  const parsed = directTranslationResponseSchema.safeParse(value);
-  if (!parsed.success || parsed.data.choices.length === 0) return undefined;
-  const choice = parsed.data.choices[0];
-  if (choice === undefined || choice.message.content === null) return undefined;
-  const cleaned = cleanTranslation(choice.message.content);
-  return cleaned.length === 0 ? undefined : cleaned;
+  const parsed = z.object({ data: sessionPromptResponseSchema }).safeParse(value);
+  if (!parsed.success) return undefined;
+  for (const part of parsed.data.data.parts) {
+    const textPart = z.object({ type: z.literal("text"), text: z.string() }).safeParse(part);
+    if (!textPart.success) continue;
+    const cleaned = cleanTranslation(textPart.data.text);
+    if (cleaned.length > 0) return cleaned;
+  }
+  return undefined;
 }
 
-export function createDirectTranslator(
-  listProviders: ProviderList,
-  log: ProviderLog,
+export function createSessionTranslator(
+  client: SessionClient,
+  directory: string,
   language: string,
-  variant: MaybeUndefined<string>,
+  log: TranslatorLog,
+  translatorSessions: Set<string>,
 ): (
   text: string,
   model: ModelReference,
   direction: TranslationDirection,
 ) => Promise<MaybeUndefined<string>> {
   return async (text, model, direction) => {
-    let providerResponse: ProviderResponse;
+    let sessionID: string | undefined;
     try {
-      const rawProviderResponse = await listProviders();
-      const parsedProviderResponse = providerResponseSchema.safeParse(rawProviderResponse);
-      if (!parsedProviderResponse.success) {
-        await log("warn", "Provider response was malformed", {
-          provider: model.providerID,
-        });
+      const created = await client.session.create({
+        query: { directory },
+        body: { title: "Auto-translation" },
+      });
+      const session = z.object({ data: z.object({ id: z.string().min(1) }) }).safeParse(created);
+      if (!session.success) {
+        await log("warn", "Translation session response was malformed");
         return undefined;
       }
-      providerResponse = parsedProviderResponse.data;
+      sessionID = session.data.data.id;
+      translatorSessions.add(sessionID);
+      const response = await client.session.prompt({
+        path: { id: sessionID },
+        query: { directory },
+        body: {
+          agent: TRANSLATOR_AGENT,
+          model,
+          system: translationSystemPrompt(direction, language),
+          tools: { "*": false },
+          parts: [{ type: "text", text }],
+        },
+      });
+      return extractTranslation(response);
     } catch (error) {
-      await log("error", "Could not read OpenCode provider metadata", {
-        error: String(error),
-      });
+      await log("warn", "Translation session failed", { error: String(error) });
       return undefined;
-    }
-    if (!("data" in providerResponse)) {
-      await log("warn", "Provider metadata was unavailable", {
-        provider: model.providerID,
-      });
-      return undefined;
-    }
-    const parsedProviders = providerListSchema.safeParse(providerResponse.data);
-    if (!parsedProviders.success) {
-      await log("warn", "Provider metadata was malformed", {
-        provider: model.providerID,
-      });
-      return undefined;
-    }
-    const provider = parsedProviders.data.all.find((item) => item.id === model.providerID);
-    if (provider === undefined) {
-      await log("warn", "Configured translation provider was not found", {
-        provider: model.providerID,
-      });
-      return undefined;
-    }
-    const modelInfo = (provider.models ?? {})[model.modelID];
-    const providerOptions = provider.options ?? {};
-    const modelApi = modelInfo === undefined ? undefined : modelInfo.api;
-    const providerBaseURL = providerOptions[PROVIDER_BASE_URL_KEY];
-    const modelURL = modelApi === undefined ? undefined : modelApi.url;
-    const providerURL = typeof providerBaseURL === "string" ? providerBaseURL : modelURL;
-    if (providerURL === undefined || providerURL.trim().length === 0) {
-      await log("warn", "Translation provider has no usable endpoint", {
-        provider: model.providerID,
-      });
-      return undefined;
-    }
-    const normalizedURL = providerURL.replace(/\/+$/, "");
-    const endpoint = normalizedURL.endsWith(CHAT_COMPLETIONS_PATH)
-      ? normalizedURL
-      : `${normalizedURL}${CHAT_COMPLETIONS_PATH}`;
-    const configuredKey = provider.key === undefined ? undefined : provider.key.trim();
-    const environmentKey = provider.env
-      .map((name) => process.env[name])
-      .find((value) => value !== undefined && value.trim().length > 0);
-    const apiKey =
-      configuredKey === undefined || configuredKey === "" || configuredKey === OAUTH_DUMMY_KEY
-        ? environmentKey
-        : configuredKey;
-    const headers = new Headers({ "Content-Type": "application/json" });
-    if (apiKey !== undefined) headers.set("Authorization", `Bearer ${apiKey}`);
-    const providerHeaders = providerOptions[PROVIDER_HEADERS_KEY];
-    const parsedHeaders = providerOptionsSchema.safeParse(providerHeaders);
-    if (parsedHeaders.success) {
-      for (const [name, value] of Object.entries(parsedHeaders.data)) {
-        if (typeof value === "string") headers.set(name, value);
+    } finally {
+      if (sessionID !== undefined) {
+        translatorSessions.delete(sessionID);
+        try {
+          await client.session.delete({ path: { id: sessionID }, query: { directory } });
+        } catch (error) {
+          await log("warn", "Could not delete translation session", { error: String(error) });
+        }
       }
-    }
-    const modelHeaders = modelInfo === undefined ? undefined : modelInfo.headers;
-    if (modelHeaders !== undefined) {
-      for (const [name, value] of Object.entries(modelHeaders)) headers.set(name, value);
-    }
-    const modelAPIId = modelApi === undefined ? undefined : modelApi.id;
-    const modelID = modelInfo === undefined ? undefined : modelInfo.id;
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        body: JSON.stringify({
-          model: modelAPIId ?? modelID ?? model.modelID,
-          messages: [
-            {
-              role: "system",
-              content: translationSystemPrompt(direction, language),
-            },
-            {
-              role: "user",
-              content: text,
-            },
-          ],
-          stream: false,
-          ...(variant === undefined ? {} : { variant }),
-        }),
-      });
-      if (!response.ok) {
-        await log("error", "Direct translation request failed", {
-          status: response.status,
-          provider: model.providerID,
-        });
-        return undefined;
-      }
-      return extractTranslation(await response.json());
-    } catch (error) {
-      await log("error", "Direct translation request failed", {
-        error: String(error),
-      });
-      return undefined;
     }
   };
 }

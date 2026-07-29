@@ -76,55 +76,35 @@ function getPluginFactory(): (...args: never[]) => unknown {
 }
 
 function createTranslationClient(prompt: () => Promise<unknown>) {
-  const fetchMock = Object.assign(
-    async () => {
-      const response = await prompt();
-      if (typeof response !== "object" || response === null || Array.isArray(response))
-        return new Response(JSON.stringify({ choices: [] }), { status: 200 });
-      const recordResult = z.record(z.string(), z.unknown()).safeParse(response);
-      if (!recordResult.success)
-        return new Response(JSON.stringify({ choices: [] }), { status: 200 });
-      const record = recordResult.data;
-      const data = record["data"];
-      if (typeof data !== "object" || data === null || Array.isArray(data))
-        return new Response(JSON.stringify({ choices: [] }), { status: 200 });
-      const dataResult = z.record(z.string(), z.unknown()).safeParse(data);
-      if (!dataResult.success)
-        return new Response(JSON.stringify({ choices: [] }), { status: 200 });
-      const dataRecord = dataResult.data;
-      const parts = dataRecord["parts"];
-      const first = Array.isArray(parts) ? parts[0] : undefined;
-      let text: unknown;
-      if (typeof first === "object" && first !== null && !Array.isArray(first)) {
-        const firstRecord = z.record(z.string(), z.unknown()).safeParse(first);
-        if (firstRecord.success) text = firstRecord.data["text"];
-      }
-      return new Response(
-        JSON.stringify({
-          choices: [{ message: { content: typeof text === "string" ? text : null } }],
-        }),
-        { status: 200 },
-      );
-    },
-    { preconnect: globalThis.fetch.preconnect },
-  );
-  globalThis.fetch = fetchMock;
+  let sessionNumber = 0;
   return {
     app: { log: async () => ({}) },
     config: { get: async () => ({ data: { small_model: "openai/model" } }) },
-    provider: {
-      list: async () => ({
-        data: {
-          all: [
-            {
-              id: "openai",
-              env: [],
-              key: "test-key",
-              models: { model: { api: { url: "https://example.test/v1" } } },
-            },
-          ],
-        },
-      }),
+    session: {
+      create: async () => ({ data: { id: `translation-${sessionNumber++}` } }),
+      prompt: async () => {
+        const raw = await prompt();
+        const record = z.record(z.string(), z.unknown()).safeParse(raw);
+        const data = record.success
+          ? z.record(z.string(), z.unknown()).safeParse(record.data["data"])
+          : undefined;
+        const parts = data?.success ? data.data["parts"] : undefined;
+        const first = Array.isArray(parts) ? parts[0] : undefined;
+        const firstRecord = z.record(z.string(), z.unknown()).safeParse(first);
+        const text =
+          firstRecord.success && typeof firstRecord.data["text"] === "string"
+            ? firstRecord.data["text"]
+            : typeof raw === "string"
+              ? raw
+              : "";
+        return {
+          data: {
+            info: { role: "assistant" },
+            parts: [{ type: "text", text }],
+          },
+        };
+      },
+      delete: async () => ({}),
     },
   };
 }
@@ -396,126 +376,94 @@ test.serial("plugin skips all hooks for excluded agents", async () => {
 
 test.serial("plugin replaces the original message with the translation", async () => {
   const createPlugin = getPluginFactory();
-  const originalFetch = globalThis.fetch;
-  let requestedBody: MaybeUndefined<Record<string, unknown>>;
-  const fetchMock = Object.assign(
-    async (_input: URL | RequestInfo, init: MaybeUndefined<RequestInit>) => {
-      const requestBody = init === undefined ? undefined : init.body;
-      const parsed: unknown = JSON.parse(String(requestBody));
-      const parsedRecord = z.record(z.string(), z.unknown()).safeParse(parsed);
-      if (parsedRecord.success) requestedBody = parsedRecord.data;
-      return new Response(JSON.stringify({ choices: [{ message: { content: "hello" } }] }), {
-        status: 200,
-      });
-    },
-    { preconnect: globalThis.fetch.preconnect },
-  );
-  globalThis.fetch = fetchMock;
+  let requestedPrompt: MaybeUndefined<Record<string, unknown>>;
   const client = {
     app: { log: async () => ({}) },
     config: {
       get: async () => ({ data: { small_model: "openai/gpt-5.6-luna" } }),
     },
-    provider: {
-      list: async () => ({
-        data: {
-          all: [
-            {
-              id: "openai",
-              env: [],
-              key: "test-key",
-              models: {
-                override: {
-                  api: { id: "api-model", url: "https://example.test/v1" },
-                },
-              },
-            },
-          ],
-        },
-      }),
+    session: {
+      create: async () => ({ data: { id: "translation-session" } }),
+      prompt: async (options: Record<string, unknown>) => {
+        requestedPrompt = options;
+        return { data: { info: { role: "assistant" }, parts: [{ type: "text", text: "hello" }] } };
+      },
+      delete: async () => ({}),
     },
   };
-  try {
-    const plugin = await Reflect.apply(createPlugin, undefined, [
-      { client, directory: "/tmp" },
-      {
-        output: "show original + translation",
-        lang: "Spanish",
-        model: "openai/override",
+  const plugin = await Reflect.apply(createPlugin, undefined, [
+    { client, directory: "/tmp" },
+    {
+      output: "show original + translation",
+      lang: "Spanish",
+      model: "openai/override",
+    },
+  ]);
+  if (plugin === null || (typeof plugin !== "object" && typeof plugin !== "function"))
+    throw new Error("Invalid plugin hooks");
+  const event = Reflect.get(plugin, "event");
+  const transform = Reflect.get(plugin, "experimental.chat.messages.transform");
+  if (typeof event !== "function" || typeof transform !== "function")
+    throw new Error("Missing plugin hooks");
+  await Reflect.apply(event, plugin, [
+    {
+      event: {
+        type: "tui.command.execute",
+        properties: { command: `${TRANSLATION_EVENT}:on` },
       },
-    ]);
-    if (plugin === null || (typeof plugin !== "object" && typeof plugin !== "function"))
-      throw new Error("Invalid plugin hooks");
-    const event = Reflect.get(plugin, "event");
-    const transform = Reflect.get(plugin, "experimental.chat.messages.transform");
-    if (typeof event !== "function" || typeof transform !== "function")
-      throw new Error("Missing plugin hooks");
-    await Reflect.apply(event, plugin, [
-      {
-        event: {
-          type: "tui.command.execute",
-          properties: { command: `${TRANSLATION_EVENT}:on` },
-        },
-      },
-    ]);
+    },
+  ]);
 
-    const output = {
-      messages: [
-        {
-          info: {
-            role: "user",
-            sessionID: "user-session",
-            id: "message-id",
+  const output = {
+    messages: [
+      {
+        info: {
+          role: "user",
+          sessionID: "user-session",
+          id: "message-id",
+          metadata: { source: "test" },
+        },
+        parts: [
+          {
+            id: "part",
+            type: "text",
+            text: "hola",
             metadata: { source: "test" },
           },
-          parts: [
-            {
-              id: "part",
-              type: "text",
-              text: "hola",
-              metadata: { source: "test" },
-            },
-          ],
-        },
-      ],
-    };
-    await Reflect.apply(transform, plugin, [{}, output]);
-
-    const firstMessage = output.messages[0];
-    if (firstMessage === undefined) throw new Error("Missing translated message");
-    const firstPart = firstMessage.parts[0];
-    if (firstPart === undefined) throw new Error("Missing translated part");
-    expect(firstPart.text).toBe("hello");
-    expect(requestedBody).toBeDefined();
-    if (requestedBody === undefined) return;
-    expect(requestedBody["model"]).toBe("api-model");
-    expect(requestedBody).not.toHaveProperty("tools");
-    const messages = requestedBody["messages"];
-    expect(messages).toEqual([
-      {
-        role: "system",
-        content: expect.stringContaining("Return only the translated text"),
+        ],
       },
-      { role: "user", content: "hola" },
-    ]);
-    expect(firstMessage.info.id).toBe("message-id");
-    expect(firstMessage.info.metadata).toEqual({ source: "test" });
-    expect(firstPart.metadata).toEqual({ source: "test" });
-    const responseTransform = Reflect.get(plugin, "experimental.text.complete");
-    if (typeof responseTransform !== "function") throw new Error("Missing text transform");
-    const response = { text: "hello" };
-    const responseInput = {
-      sessionID: "user-session",
-      partID: "response-part",
-    };
-    await Reflect.apply(responseTransform, plugin, [responseInput, response]);
-    await Reflect.apply(responseTransform, plugin, [responseInput, response]);
-    expect(response.text).toBe(
-      "hello\n\n----------------------------------------\n[Translation]\nhello",
-    );
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+    ],
+  };
+  await Reflect.apply(transform, plugin, [{}, output]);
+
+  const firstMessage = output.messages[0];
+  if (firstMessage === undefined) throw new Error("Missing translated message");
+  const firstPart = firstMessage.parts[0];
+  if (firstPart === undefined) throw new Error("Missing translated part");
+  expect(firstPart.text).toBe("hello");
+  expect(requestedPrompt).toBeDefined();
+  if (requestedPrompt === undefined) return;
+  expect(requestedPrompt["body"]).toMatchObject({
+    agent: "opencode-auto-translate-internal",
+    model: { providerID: "openai", modelID: "override" },
+    tools: { "*": false },
+    parts: [{ type: "text", text: "hola" }],
+  });
+  expect(firstMessage.info.id).toBe("message-id");
+  expect(firstMessage.info.metadata).toEqual({ source: "test" });
+  expect(firstPart.metadata).toEqual({ source: "test" });
+  const responseTransform = Reflect.get(plugin, "experimental.text.complete");
+  if (typeof responseTransform !== "function") throw new Error("Missing text transform");
+  const response = { text: "hello" };
+  const responseInput = {
+    sessionID: "user-session",
+    partID: "response-part",
+  };
+  await Reflect.apply(responseTransform, plugin, [responseInput, response]);
+  await Reflect.apply(responseTransform, plugin, [responseInput, response]);
+  expect(response.text).toBe(
+    "hello\n\n----------------------------------------\n[Translation]\nhello",
+  );
 });
 
 test.serial(
@@ -673,7 +621,7 @@ test("translation hooks fail open when configuration response is malformed", asy
   };
   const plugin = await Reflect.apply(createPlugin, undefined, [
     { client, directory: "/tmp" },
-    { enabled: true },
+    { enabled: true, model: "invalid" },
   ]);
   if (plugin === null || typeof plugin !== "object") throw new Error("Invalid plugin hooks");
   const transform = Reflect.get(plugin, "experimental.chat.messages.transform");
