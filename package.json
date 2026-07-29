@@ -54,17 +54,17 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "^1.18.5",
+    "@opencode-ai/plugin": "^1.18.9",
     "@opentui/core": "^0.4.5",
     "@opentui/keymap": "^0.4.5",
     "@opentui/solid": "^0.4.5",
     "@types/bun": "latest",
-    "fallow": "^3.9.1",
-    "jscpd": "^5.0.12",
+    "fallow": "^3.10.0",
+    "jscpd": "^5.0.14",
     "knip": "^6.29.0",
     "lint-staged": "^17.2.0",
     "oxfmt": "^0.61.0",
-    "oxlint": "^1.75.0",
+    "oxlint": "^1.76.0",
     "simple-git-hooks": "^2.13.1",
     "solid-js": "1.9.12",
     "typescript": "^7.0.2"
