@@ -27,6 +27,14 @@ An OpenCode plugin that translates user prompts to English before they reach the
 
 ## Installation
 
+For a guided global setup, run:
+
+```bash
+npx opencode-auto-translate
+```
+
+The installer registers the server and TUI plugin in `opencode.json` and `tui.json`, then creates `translate.json`. It preserves existing JSON settings and refuses to modify an invalid or unsupported configuration file. Restart OpenCode after setup.
+
 Install the package through OpenCode:
 
 ```bash
