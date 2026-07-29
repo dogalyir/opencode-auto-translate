@@ -173,6 +173,8 @@ Each translation uses a temporary internal session with the selected model. Sess
 
 If configuration lookup, session creation, translation, response parsing, or cleanup fails, the original content remains unchanged and the failure is logged without breaking the main request.
 
+Response display is idempotent: if multiple server plugin instances receive the same completed text, an existing canonical translation block is left unchanged. If duplicate output persists, run `opencode debug info` and remove mixed registrations such as both a local `dist/server.js` path and `opencode-auto-translate@latest`. The server and TUI registrations are separate runtimes; registering the TUI entrypoint does not translate server responses.
+
 ## TUI controls
 
 Use `/translate` from the command palette or press `Ctrl+Shift+T`. The prompt badge shows the current state, for example:
