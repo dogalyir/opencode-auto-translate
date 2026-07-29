@@ -2,56 +2,56 @@
   "name": "opencode-auto-translate",
   "version": "0.3.0",
   "description": "Translate user prompts to English before OpenCode sends them to the main model.",
-  "license": "MIT",
   "keywords": [
+    "ai-agents",
+    "localization",
     "opencode",
     "opencode-plugin",
-    "translation",
-    "localization",
-    "ai-agents"
+    "translation"
   ],
+  "homepage": "https://github.com/dogalyir/opencode-auto-translate#readme",
+  "bugs": {
+    "url": "https://github.com/dogalyir/opencode-auto-translate/issues"
+  },
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dogalyir/opencode-auto-translate.git"
   },
-  "bugs": {
-    "url": "https://github.com/dogalyir/opencode-auto-translate/issues"
-  },
-  "homepage": "https://github.com/dogalyir/opencode-auto-translate#readme",
-  "module": "./dist/server.js",
-  "main": "./dist/server.js",
   "bin": {
     "opencode-auto-translate": "./dist/cli.js"
   },
-  "type": "module",
   "files": [
     "dist",
     "README.md",
     "LICENSE"
   ],
-  "engines": {
-    "opencode": ">=1.18.5"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
+  "type": "module",
+  "main": "./dist/server.js",
+  "module": "./dist/server.js",
   "exports": {
     ".": "./dist/server.js",
     "./server": "./dist/server.js",
     "./tui": "./dist/tui.js"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "generate:schema": "bun scripts/generate-schema.ts",
     "build": "bun run generate:schema && bun build src/server.ts src/tui.tsx src/cli.ts --outdir dist --target node --external '@opentui/*' --external 'solid-js'",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "lint": "bunx oxlint src test",
+    "lint": "bunx oxfmt --check src test && bunx oxlint src test",
     "check:duplicates": "bunx jscpd src test --threshold 0",
     "check:unused": "bunx knip",
     "check:fallow": "fallow --production --ci --skip health",
     "analyze:fallow": "fallow --production --skip dead-code,dupes; exit 0",
     "check:all": "bun run typecheck && bun test && bun run lint && bun run check:duplicates && bun run check:unused && bun run check:fallow && bun run build",
     "prepare": "simple-git-hooks"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.18.5",
@@ -63,10 +63,11 @@
     "jscpd": "^5.0.12",
     "knip": "^6.29.0",
     "lint-staged": "^17.2.0",
+    "oxfmt": "^0.61.0",
     "oxlint": "^1.75.0",
     "simple-git-hooks": "^2.13.1",
-    "typescript": "^7.0.2",
-    "solid-js": "1.9.12"
+    "solid-js": "1.9.12",
+    "typescript": "^7.0.2"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": "^1.18.5",
@@ -75,14 +76,17 @@
     "@opentui/solid": "^0.4.5",
     "solid-js": "1.9.12"
   },
-  "dependencies": {
-    "zod": "^4.4.3"
-  },
-  "lint-staged": {
-    "*.{ts,tsx}": "bunx oxlint"
-  },
   "simple-git-hooks": {
     "pre-commit": "bunx lint-staged",
     "pre-push": "bun run check:all"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "bunx oxfmt",
+      "bunx oxlint"
+    ]
+  },
+  "engines": {
+    "opencode": ">=1.18.5"
   }
 }
