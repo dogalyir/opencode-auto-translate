@@ -2,7 +2,7 @@ import { z } from "zod";
 import { directTranslationResponseSchema, providerListSchema } from "./schemas";
 import {
   cleanTranslation,
-  translationPrompt,
+  translationSystemPrompt,
   type ModelReference,
   type TranslationDirection,
 } from "./translation";
@@ -130,8 +130,12 @@ export function createDirectTranslator(
           model: modelAPIId ?? modelID ?? model.modelID,
           messages: [
             {
+              role: "system",
+              content: translationSystemPrompt(direction, language),
+            },
+            {
               role: "user",
-              content: translationPrompt(text, direction, language),
+              content: text,
             },
           ],
           stream: false,
