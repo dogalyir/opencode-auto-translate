@@ -2,10 +2,7 @@
 import type { TuiPlugin, TuiPluginModule } from "@opencode-ai/plugin/tui";
 import { createSignal } from "solid-js";
 import { loadPluginOptions } from "./config";
-import {
-  TRANSLATION_EVENT,
-  TRANSLATION_ID,
-} from "./translation";
+import { TRANSLATION_EVENT, TRANSLATION_ID } from "./translation";
 
 const ID = TRANSLATION_ID;
 const KEY = `${ID}.enabled`;
@@ -14,9 +11,16 @@ const tui: TuiPlugin = async (api, _directory, options) => {
   const pluginOptions = await loadPluginOptions(options);
   const language = pluginOptions.lang;
   const storedValue = api.kv.get<unknown>(KEY, undefined);
-  const initialState = typeof storedValue === "boolean" ? storedValue : pluginOptions.enabled === true;
+  const initialState =
+    typeof storedValue === "boolean"
+      ? storedValue
+      : pluginOptions.enabled === true;
   const [isEnabled, setEnabled] = createSignal(initialState);
-  const publish = async (enabled: boolean, showToast = true, rollbackOnFailure = true) => {
+  const publish = async (
+    enabled: boolean,
+    showToast = true,
+    rollbackOnFailure = true,
+  ) => {
     api.kv.set(KEY, enabled);
     setEnabled(enabled);
     if (showToast)
@@ -34,7 +38,7 @@ const tui: TuiPlugin = async (api, _directory, options) => {
           },
         },
       });
-      if (!response.error) return;
+      if (response.error === undefined) return;
       console.warn("Auto-translation toggle rejected", String(response.error));
     } catch (error) {
       console.warn("Auto-translation toggle publish failed", String(error));
@@ -64,7 +68,7 @@ const tui: TuiPlugin = async (api, _directory, options) => {
         run: () => publish(!isEnabled()),
       },
     ],
-  })
+  });
 
   api.keymap.registerLayer({
     mode: "base",

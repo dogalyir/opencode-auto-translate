@@ -1,26 +1,63 @@
 import { z } from "zod";
+import type { MaybeUndefined } from "./types";
 
 export const TRANSLATION_ID = "opencode-auto-translate";
 export const TRANSLATION_EVENT = `${TRANSLATION_ID}.toggle`;
-const DISPLAY_MODES = ["show original", "show translation", "show original + translation"] as const;
+const DISPLAY_MODES = [
+  "show original",
+  "show translation",
+  "show original + translation",
+] as const;
 const TRANSLATION_SEPARATOR = "----------------------------------------";
 const TRANSLATION_MARKER = `${TRANSLATION_SEPARATOR}\n[Translation]\n`;
-export const TRANSLATION_AGENT = "general";
-export const TRANSLATION_MODEL_INSTRUCTION =
-  "You are a precise translation engine. Translate text only.";
 const TRANSLATION_SOURCE = "the source language";
 
-export const pluginOptionsSchema = z.object({
-  enabled: z.boolean().optional().meta({ description: "Enable or disable automatic translation." }),
-  model: z.string().optional().meta({ description: "Translation model in provider/model format." }),
-  variant: z.string().trim().min(1).optional().meta({ description: "Optional provider-specific model variant." }),
-  lang: z.string().trim().min(1).default("English").meta({ description: "Language used for translating assistant responses." }),
-  input: z.enum(DISPLAY_MODES).default("show original").meta({ description: "How translated user prompts are displayed." }),
-  output: z.enum(DISPLAY_MODES).default("show original").meta({ description: "How translated assistant responses are displayed." }),
-}).meta({
-  title: "OpenCode Auto Translate configuration",
-  description: "Global configuration for the opencode-auto-translate plugin.",
-});
+export const pluginOptionsSchema = z
+  .object({
+    enabled: z
+      .boolean()
+      .optional()
+      .meta({ description: "Enable or disable automatic translation." }),
+    model: z
+      .string()
+      .optional()
+      .meta({ description: "Translation model in provider/model format." }),
+    variant: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .meta({ description: "Optional provider-specific model variant." }),
+    lang: z
+      .string()
+      .trim()
+      .min(1)
+      .default("English")
+      .meta({
+        description: "Language used for translating assistant responses.",
+      }),
+    input: z
+      .enum(DISPLAY_MODES)
+      .default("show original")
+      .meta({ description: "How translated user prompts are displayed." }),
+    output: z
+      .enum(DISPLAY_MODES)
+      .default("show original")
+      .meta({
+        description: "How translated assistant responses are displayed.",
+      }),
+    excluded_agents: z
+      .array(z.string().trim().min(1))
+      .default([])
+      .meta({
+        description:
+          "Agents and sub-agents excluded from all translation behavior.",
+      }),
+  })
+  .meta({
+    title: "OpenCode Auto Translate configuration",
+    description: "Global configuration for the opencode-auto-translate plugin.",
+  });
 
 const modelReferenceSchema = z.object({
   providerID: z.string().trim().min(1),
@@ -55,7 +92,7 @@ export type PluginOptions = z.infer<typeof pluginOptionsSchema>;
 export type TranslationPart = z.infer<typeof translationPartSchema>;
 export type TranslationDirection = "to-english" | "from-english";
 
-export function parseModelRef(value: string): ModelReference | undefined {
+export function parseModelRef(value: string): MaybeUndefined<ModelReference> {
   const separator = value.indexOf("/");
   if (separator <= 0 || separator === value.length - 1) return undefined;
   const parsed = modelReferenceSchema.safeParse({
@@ -111,7 +148,7 @@ export function hasDisplayedTranslation(text: string): boolean {
   return text.includes(`\n\n${TRANSLATION_MARKER}`);
 }
 
-export function parseToggleCommand(command: string): boolean | undefined {
+export function parseToggleCommand(command: string): MaybeUndefined<boolean> {
   if (command === `${TRANSLATION_EVENT}:on`) return true;
   if (command === `${TRANSLATION_EVENT}:off`) return false;
   return undefined;

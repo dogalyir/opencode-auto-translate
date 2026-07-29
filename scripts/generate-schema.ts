@@ -7,4 +7,7 @@ const schema = z.toJSONSchema(pluginOptionsSchema, {
 });
 
 await mkdir("dist", { recursive: true });
-await Bun.write("dist/translate.schema.json", `${JSON.stringify(schema, null, 2)}\n`);
+await Bun.write(
+  "dist/translate.schema.json",
+  `${JSON.stringify(schema, null, 2)}\n`,
+);
