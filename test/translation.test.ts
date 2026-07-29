@@ -13,6 +13,7 @@ import {
   parseToggleCommand,
   translationSystemPrompt,
   displayTranslation,
+  extractOriginalTranslation,
   hasDisplayedTranslation,
 } from "../src/translation";
 
@@ -187,10 +188,54 @@ test("display modes preserve English context", () => {
 test("detects the canonical displayed translation block", () => {
   const displayed = displayTranslation("Hello", "Hola", "show translation");
   expect(hasDisplayedTranslation(displayed)).toBe(true);
+  expect(extractOriginalTranslation(displayed)).toBe("Hello");
   expect(
     hasDisplayedTranslation("Hello\n\n----------------------------------------\n[Other]\nHola"),
   ).toBe(false);
+  expect(
+    extractOriginalTranslation(
+      "Hello\n\n----------------------------------------\n[Translation]\n",
+    ),
+  ).toBeUndefined();
 });
+
+test.serial(
+  "message transform removes translated assistant display text before model calls",
+  async () => {
+    const createPlugin = getPluginFactory();
+    const client = createTranslationClient(async () => ({
+      data: { parts: [{ type: "text", text: "unused" }] },
+    }));
+    const plugin = await Reflect.apply(createPlugin, undefined, [
+      { client, directory: "/tmp" },
+      { enabled: true, model: "openai/model" },
+    ]);
+    if (plugin === null || typeof plugin !== "object") throw new Error("Invalid plugin");
+    const transform = Reflect.get(plugin, "experimental.chat.messages.transform");
+    if (typeof transform !== "function") throw new Error("Missing message transform");
+
+    const displayed = displayTranslation(
+      "English response",
+      "Respuesta en español",
+      "show translation",
+    );
+    const output = {
+      messages: [
+        {
+          info: { role: "assistant", sessionID: "session" },
+          parts: [{ id: "part", type: "text", text: displayed }],
+        },
+      ],
+    };
+    await Reflect.apply(transform, plugin, [{}, output]);
+
+    const firstMessage = output.messages[0];
+    if (firstMessage === undefined) throw new Error("Missing assistant message");
+    const firstPart = firstMessage.parts[0];
+    if (firstPart === undefined) throw new Error("Missing assistant part");
+    expect(firstPart.text).toBe("English response");
+  },
+);
 
 test("plugin options provide strict defaults and accept model display settings", () => {
   expect(pluginOptionsSchema.parse({})).toMatchObject({

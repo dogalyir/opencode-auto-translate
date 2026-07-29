@@ -6,6 +6,7 @@ import { createDirectTranslator } from "./provider";
 import type { MaybeUndefined } from "./types";
 import {
   displayTranslation,
+  extractOriginalTranslation,
   hasDisplayedTranslation,
   isTranslatablePart,
   parseModelRef,
@@ -233,6 +234,14 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
         const outputMessage = output.messages[index];
         if (outputMessage === undefined) return;
         Object.assign(outputMessage, message);
+        if (message.info.role === "assistant") {
+          for (const part of message.parts) {
+            if (!isTranslatablePart(part)) continue;
+            const original = extractOriginalTranslation(part.text);
+            if (original !== undefined) part.text = original;
+          }
+          continue;
+        }
         if (message.info.agent !== undefined)
           sessionAgents.set(message.info.sessionID, message.info.agent);
         if (isExcludedSession(message.info.sessionID)) continue;

@@ -130,6 +130,14 @@ export function hasDisplayedTranslation(text: string): boolean {
   return text.includes(`\n\n${TRANSLATION_MARKER}`);
 }
 
+export function extractOriginalTranslation(text: string): MaybeUndefined<string> {
+  const markerIndex = text.lastIndexOf(`\n\n${TRANSLATION_MARKER}`);
+  if (markerIndex <= 0) return undefined;
+  const translated = text.slice(markerIndex + 2 + TRANSLATION_MARKER.length).trim();
+  if (translated.length === 0) return undefined;
+  return text.slice(0, markerIndex);
+}
+
 export function parseToggleCommand(command: string): MaybeUndefined<boolean> {
   if (command === `${TRANSLATION_EVENT}:on`) return true;
   if (command === `${TRANSLATION_EVENT}:off`) return false;
