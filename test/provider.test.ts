@@ -35,6 +35,14 @@ function createTranslator(providerData: unknown, response: Response | Error) {
 
 test("provider response envelopes require exactly one explicit state", () => {
   expect(providerResponseSchema.safeParse({ data: {} }).success).toBe(true);
+  expect(
+    providerResponseSchema.safeParse({
+      data: {},
+      error: undefined,
+      request: new Request("https://example.test/provider"),
+      response: new Response(),
+    }).success,
+  ).toBe(true);
   expect(providerResponseSchema.safeParse({ error: "failed" }).success).toBe(true);
   expect(providerResponseSchema.safeParse({}).success).toBe(false);
   expect(providerResponseSchema.safeParse({ data: {}, error: "failed" }).success).toBe(false);

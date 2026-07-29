@@ -143,6 +143,14 @@ test("server boundary parsers reject malformed and incomplete inputs", () => {
 
 test("configuration response envelopes require exactly one explicit state", () => {
   expect(configResponseEnvelopeSchema.safeParse({ data: {} }).success).toBe(true);
+  expect(
+    configResponseEnvelopeSchema.safeParse({
+      data: {},
+      error: undefined,
+      request: new Request("https://example.test/config"),
+      response: new Response(),
+    }).success,
+  ).toBe(true);
   expect(configResponseEnvelopeSchema.safeParse({ error: "failed" }).success).toBe(true);
   expect(configResponseEnvelopeSchema.safeParse({}).success).toBe(false);
   expect(configResponseEnvelopeSchema.safeParse({ data: {}, error: "failed" }).success).toBe(false);

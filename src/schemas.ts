@@ -1,14 +1,20 @@
 import { z } from "zod";
 
-export const configResponseEnvelopeSchema = z.union([
-  z.object({ data: z.unknown() }).strict(),
-  z.object({ error: z.unknown() }).strict(),
-]);
+function responseEnvelopeSchema<T extends z.ZodType>(dataSchema: T) {
+  return z
+    .union([
+      z.object({ data: dataSchema }).passthrough(),
+      z.object({ error: z.unknown() }).passthrough(),
+    ])
+    .refine(
+      (value) => !("data" in value && "error" in value && value.error !== undefined),
+      "Response cannot contain both data and error",
+    );
+}
+
+export const configResponseEnvelopeSchema = responseEnvelopeSchema(z.unknown());
 export const configResponseSchema = z.object({ small_model: z.unknown().optional() }).passthrough();
-export const tuiPublishResponseSchema = z.union([
-  z.object({ data: z.boolean() }).strict(),
-  z.object({ error: z.unknown() }).strict(),
-]);
+export const tuiPublishResponseSchema = responseEnvelopeSchema(z.boolean());
 const providerModelSchema = z.object({
   id: z.string().optional(),
   api: z.object({ id: z.string().optional(), url: z.string().optional() }).optional(),
@@ -23,10 +29,7 @@ const providerSchema = z.object({
   models: z.record(z.string(), providerModelSchema).optional(),
 });
 export const providerListSchema = z.object({ all: z.array(providerSchema) });
-export const providerResponseSchema = z.union([
-  z.object({ data: z.record(z.string(), z.unknown()) }).strict(),
-  z.object({ error: z.unknown() }).strict(),
-]);
+export const providerResponseSchema = responseEnvelopeSchema(z.record(z.string(), z.unknown()));
 export const directTranslationResponseSchema = z.object({
   choices: z.array(
     z.object({

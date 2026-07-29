@@ -34,6 +34,14 @@ function createTuiApi(storedValue: unknown) {
 
 test("TUI publish responses require an explicit success or error state", () => {
   expect(tuiPublishResponseSchema.safeParse({ data: true }).success).toBe(true);
+  expect(
+    tuiPublishResponseSchema.safeParse({
+      data: true,
+      error: undefined,
+      request: new Request("https://example.test/tui/publish"),
+      response: new Response(),
+    }).success,
+  ).toBe(true);
   expect(tuiPublishResponseSchema.safeParse({ error: "rejected" }).success).toBe(true);
   expect(tuiPublishResponseSchema.safeParse({}).success).toBe(false);
   expect(tuiPublishResponseSchema.safeParse({ data: true, error: "rejected" }).success).toBe(false);
