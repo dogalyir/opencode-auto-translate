@@ -35,6 +35,21 @@ const translationPartSchema = z.object({
   ignored: z.boolean().optional(),
 });
 
+const questionOptionSchema = z.object({
+  label: z.string(),
+  description: z.string(),
+});
+const questionPromptSchema = z.object({
+  question: z.string(),
+  header: z.string(),
+  options: z.array(questionOptionSchema),
+  multiple: z.boolean().optional(),
+});
+export const questionArgsSchema = z.object({
+  questions: z.array(questionPromptSchema),
+});
+export type QuestionArgs = z.infer<typeof questionArgsSchema>;
+
 export type ModelReference = z.infer<typeof modelReferenceSchema>;
 export type PluginOptions = z.infer<typeof pluginOptionsSchema>;
 export type TranslationPart = z.infer<typeof translationPartSchema>;

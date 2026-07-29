@@ -232,6 +232,59 @@ test("plugin replaces the original message with the translation", async () => {
   expect(response.text).toBe("hello\n\n----------------------------------------\n[Translation]\nhello");
 });
 
+test("plugin translates question dialogs before display and restores option labels", async () => {
+  const createPlugin = getPluginFactory();
+  const client = createTranslationClient(async () => {
+      return {
+        data: {
+          parts: [{
+            type: "text",
+            text: JSON.stringify({
+              questions: [{
+                question: "¿Qué modo?",
+                header: "Modo",
+                options: [{ label: "Completo", description: "Instala todo" }],
+              }],
+            }),
+          }],
+        },
+      };
+  });
+  const plugin = await Reflect.apply(createPlugin, undefined, [
+    { client, directory: "/tmp" },
+    { enabled: true, lang: "Spanish" },
+  ]);
+  if (plugin === null || typeof plugin !== "object") throw new Error("Invalid plugin");
+  const before = Reflect.get(plugin, "tool.execute.before");
+  const after = Reflect.get(plugin, "tool.execute.after");
+  if (typeof before !== "function" || typeof after !== "function") throw new Error("Missing tool hooks");
+
+  const args = {
+    questions: [{
+      question: "Which mode?",
+      header: "Mode",
+      options: [{ label: "Full", description: "Install everything" }],
+    }],
+  };
+  await Reflect.apply(before, plugin, [
+    { tool: "question", sessionID: "session", callID: "call" },
+    { args },
+  ]);
+  expect(args.questions[0]?.question).toBe("¿Qué modo?");
+  expect(args.questions[0]?.options[0]?.label).toBe("Completo");
+
+  const output = {
+    output: 'User has answered your questions: "¿Qué modo?"="Completo"',
+    metadata: { answers: [["Completo"]] },
+  };
+  await Reflect.apply(after, plugin, [
+    { tool: "question", sessionID: "session", callID: "call", args },
+    output,
+  ]);
+  expect(output.output).toContain('"Which mode?"="Full"');
+  expect(output.metadata).toEqual({ answers: [["Full"]] });
+});
+
 test("plugin does not append duplicate translations for concurrent completion hooks", async () => {
   const createPlugin = getPluginFactory();
   let releaseTranslation: (() => void) | undefined;

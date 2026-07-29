@@ -8,11 +8,13 @@ import {
   isTranslatablePart,
   parseModelRef,
   parseToggleCommand,
+  questionArgsSchema,
   TRANSLATION_AGENT,
   TRANSLATION_MODEL_INSTRUCTION,
   TRANSLATION_ID,
   translationPrompt,
   type ModelReference,
+  type QuestionArgs,
 } from "./translation";
 
 const sessionIdSchema = z.string().min(1);
@@ -30,6 +32,9 @@ const messagesSchema = z.array(
     parts: z.array(z.record(z.string(), z.unknown())),
   }).passthrough(),
 );
+const questionAnswersSchema = z.object({
+  answers: z.array(z.array(z.string())),
+});
 
 function extractTranslation(value: unknown): string | undefined {
   const parsed = translationResponseSchema.safeParse(value);
@@ -44,6 +49,8 @@ function extractTranslation(value: unknown): string | undefined {
 }
 
 type MessageList = z.infer<typeof messagesSchema>;
+type QuestionTranslation = { original: QuestionArgs; localized: QuestionArgs };
+type ToolOutput = { output: string; metadata: unknown };
 
 function parseMessages(value: unknown): MessageList | undefined {
   const parsed = messagesSchema.safeParse(value);
@@ -58,7 +65,8 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
 	  const inFlight = new Map<string, Promise<string | undefined>>();
 	  const internalSessions = new Set<string>();
 	  const translatingParts = new Set<string>();
-	  const translatedParts = new Set<string>();
+  const translatedParts = new Set<string>();
+  const questionTranslations = new Map<string, QuestionTranslation>();
 
   async function log(
     level: "warn" | "error",
@@ -188,6 +196,68 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     return translated;
   }
 
+  async function translateQuestionArgs(
+    args: QuestionArgs,
+    model: ModelReference,
+    callID: string,
+  ): Promise<QuestionArgs | undefined> {
+    const source = JSON.stringify(args);
+    const translated = await getTranslation(
+      source,
+      model,
+      `${model.providerID}/${model.modelID}:question:${callID}:${source}`,
+      "from-english",
+    );
+    if (translated === undefined) return undefined;
+    const parsed = questionArgsSchema.safeParse(JSON.parse(translated));
+    if (!parsed.success) return undefined;
+    return parsed.data;
+  }
+
+  async function restoreQuestionResult(
+    callID: string,
+    output: ToolOutput,
+  ): Promise<void> {
+    const translation = questionTranslations.get(callID);
+    questionTranslations.delete(callID);
+    if (translation === undefined) return;
+
+    for (const [index, originalQuestion] of translation.original.questions.entries()) {
+      const localizedQuestion = translation.localized.questions[index];
+      if (localizedQuestion === undefined) continue;
+      output.output = output.output.split(localizedQuestion.question).join(originalQuestion.question);
+      output.output = output.output.split(localizedQuestion.header).join(originalQuestion.header);
+      for (const [optionIndex, originalOption] of originalQuestion.options.entries()) {
+        const localizedOption = localizedQuestion.options[optionIndex];
+        if (localizedOption === undefined) continue;
+        output.output = output.output.split(localizedOption.label).join(originalOption.label);
+        output.output = output.output.split(localizedOption.description).join(originalOption.description);
+      }
+    }
+
+    const parsedMetadata = questionAnswersSchema.safeParse(output.metadata);
+    if (!parsedMetadata.success) return;
+    const model = await resolveModel();
+    const answers = await Promise.all(parsedMetadata.data.answers.map(async (questionAnswers, index) => {
+      const originalQuestion = translation.original.questions[index];
+      const localizedQuestion = translation.localized.questions[index];
+      if (originalQuestion === undefined || localizedQuestion === undefined)
+        return questionAnswers;
+      return Promise.all(questionAnswers.map(async (answer) => {
+        const optionIndex = localizedQuestion.options.findIndex((option) => option.label === answer);
+        if (optionIndex >= 0) return originalQuestion.options[optionIndex]?.label ?? answer;
+        if (model === undefined || answer === "Unanswered") return answer;
+        return await getTranslation(
+          answer,
+          model,
+          `${model.providerID}/${model.modelID}:question-answer:${callID}:${index}:${answer}`,
+          "to-english",
+        ) ?? answer;
+      }));
+    }));
+    output.metadata = { ...parsedMetadata.data, answers };
+  }
+
   function selectModel(configuredSmallModel: unknown): ModelReference | undefined {
     const configured = z.string().safeParse(configuredSmallModel);
     const configuredReference = configured.success
@@ -251,6 +321,34 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
           const translated = await getTranslation(part.text, model, key);
           if (translated !== undefined) part.text = translated;
         }
+      }
+    },
+    "tool.execute.before": async (input, output) => {
+      if (!enabled || input.tool !== "question") return;
+      const parsed = questionArgsSchema.safeParse(output.args);
+      if (!parsed.success) return;
+      const model = await resolveModel();
+      if (model === undefined) return;
+      try {
+        const localized = await translateQuestionArgs(parsed.data, model, input.callID);
+        if (localized !== undefined) {
+          output.args.questions = localized.questions;
+          questionTranslations.set(input.callID, {
+            original: parsed.data,
+            localized,
+          });
+        }
+      } catch (error) {
+        await log("warn", "Question translation failed", { error: String(error) });
+      }
+    },
+    "tool.execute.after": async (input, output) => {
+      if (input.tool !== "question") return;
+      try {
+        await restoreQuestionResult(input.callID, output);
+      } catch (error) {
+        questionTranslations.delete(input.callID);
+        await log("warn", "Question result restoration failed", { error: String(error) });
       }
     },
 	    "experimental.text.complete": async (input, output) => {
