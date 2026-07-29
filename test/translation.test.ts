@@ -276,7 +276,7 @@ test("shared config is loaded before inline options", async () => {
   }
 });
 
-test("plugin skips all hooks for excluded agents", async () => {
+test.serial("plugin skips all hooks for excluded agents", async () => {
   const createPlugin = getPluginFactory();
   const client = createTranslationClient(async () => ({
     data: { parts: [{ type: "text", text: "hola" }] },
@@ -335,7 +335,7 @@ test("plugin skips all hooks for excluded agents", async () => {
   expect(response.text).toBe("hello");
 });
 
-test("plugin replaces the original message with the translation", async () => {
+test.serial("plugin replaces the original message with the translation", async () => {
   const createPlugin = getPluginFactory();
   const originalFetch = globalThis.fetch;
   let requestedBody: MaybeUndefined<Record<string, unknown>>;
@@ -461,7 +461,7 @@ test("plugin replaces the original message with the translation", async () => {
   }
 });
 
-test("plugin translates question dialogs before display and restores option labels", async () => {
+test.serial("plugin translates question dialogs before display and restores option labels", async () => {
   const createPlugin = getPluginFactory();
   let translatedQuestion = JSON.stringify({
     questions: [
@@ -486,7 +486,7 @@ test("plugin translates question dialogs before display and restores option labe
   });
   const plugin = await Reflect.apply(createPlugin, undefined, [
     { client, directory: "/tmp" },
-    { enabled: true, lang: "Spanish" },
+    { enabled: true, lang: "Spanish", model: "openai/model" },
   ]);
   if (plugin === null || typeof plugin !== "object")
     throw new Error("Invalid plugin");
@@ -516,7 +516,7 @@ test("plugin translates question dialogs before display and restores option labe
   expectQuestion(malformedArgs, "Which mode?", "Full");
 });
 
-test("plugin does not append duplicate translations for concurrent completion hooks", async () => {
+test.serial("plugin does not append duplicate translations for concurrent completion hooks", async () => {
   const createPlugin = getPluginFactory();
   let releaseTranslation: MaybeUndefined<() => void>;
   const translationStarted = new Promise<void>((resolve) => {
@@ -528,7 +528,12 @@ test("plugin does not append duplicate translations for concurrent completion ho
   });
   const plugin = await Reflect.apply(createPlugin, undefined, [
     { client, directory: "/tmp" },
-    { enabled: true, output: "show translation", lang: "Spanish" },
+    {
+      enabled: true,
+      output: "show translation",
+      lang: "Spanish",
+      model: "openai/model",
+    },
   ]);
   if (plugin === null || typeof plugin !== "object")
     throw new Error("Invalid plugin hooks");
@@ -557,18 +562,28 @@ test("plugin does not append duplicate translations for concurrent completion ho
   expect(secondResponse.text).toBe("hello");
 });
 
-test("plugin instances do not append duplicate response translations", async () => {
+test.serial("plugin instances do not append duplicate response translations", async () => {
   const createPlugin = getPluginFactory();
   const client = createTranslationClient(async () => ({
     data: { parts: [{ type: "text", text: "hola" }] },
   }));
   const firstPlugin = await Reflect.apply(createPlugin, undefined, [
     { client, directory: "/tmp" },
-    { enabled: true, output: "show translation", lang: "Spanish" },
+    {
+      enabled: true,
+      output: "show translation",
+      lang: "Spanish",
+      model: "openai/model",
+    },
   ]);
   const secondPlugin = await Reflect.apply(createPlugin, undefined, [
     { client, directory: "/tmp" },
-    { enabled: true, output: "show translation", lang: "Spanish" },
+    {
+      enabled: true,
+      output: "show translation",
+      lang: "Spanish",
+      model: "openai/model",
+    },
   ]);
   if (firstPlugin === null || typeof firstPlugin !== "object")
     throw new Error("Invalid first plugin");

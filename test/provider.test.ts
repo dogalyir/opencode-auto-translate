@@ -32,7 +32,7 @@ function createTranslator(providerData: unknown, response: Response | Error) {
   return { logs, translator };
 }
 
-test("provider transport logs malformed metadata and fails open", async () => {
+test.serial("provider transport logs malformed metadata and fails open", async () => {
   const { logs, translator } = createTranslator(
     { all: "invalid" },
     new Response(),
@@ -41,7 +41,7 @@ test("provider transport logs malformed metadata and fails open", async () => {
   expect(logs).toEqual(["Provider metadata was malformed"]);
 });
 
-test("provider transport logs missing endpoints and fails open", async () => {
+test.serial("provider transport logs missing endpoints and fails open", async () => {
   const providerData = {
     all: [{ id: "provider", env: [], models: { model: {} } }],
   };
@@ -50,7 +50,7 @@ test("provider transport logs missing endpoints and fails open", async () => {
   expect(logs).toEqual(["Translation provider has no usable endpoint"]);
 });
 
-test("provider transport logs HTTP failures and network errors", async () => {
+test.serial("provider transport logs HTTP failures and network errors", async () => {
   const providerData = {
     all: [
       {
