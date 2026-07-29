@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { tuiPublishResponseSchema } from "../src/schemas";
 import type { MaybeUndefined } from "../src/types";
 
 const tuiModule = await import("../src/tui");
@@ -14,7 +15,7 @@ function createTuiApi(storedValue: unknown) {
       tui: {
         publish: async ({ body }: { body: { properties: { command: string } } }) => {
           published.push(body.properties.command);
-          return {};
+          return { data: true };
         },
       },
     },
@@ -30,6 +31,14 @@ function createTuiApi(storedValue: unknown) {
   };
   return { api, layers, published, getSlotRenderer: () => slotRenderer };
 }
+
+test("TUI publish responses require an explicit success or error state", () => {
+  expect(tuiPublishResponseSchema.safeParse({ data: true }).success).toBe(true);
+  expect(tuiPublishResponseSchema.safeParse({ error: "rejected" }).success).toBe(true);
+  expect(tuiPublishResponseSchema.safeParse({}).success).toBe(false);
+  expect(tuiPublishResponseSchema.safeParse({ data: true, error: "rejected" }).success).toBe(false);
+  expect(tuiPublishResponseSchema.safeParse({ data: "true" }).success).toBe(false);
+});
 
 test("TUI initializes with invalid options and uses the safe language fallback", async () => {
   const { api, layers, published, getSlotRenderer } = createTuiApi(false);

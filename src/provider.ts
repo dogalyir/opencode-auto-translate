@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { directTranslationResponseSchema, providerListSchema } from "./schemas";
+import {
+  directTranslationResponseSchema,
+  providerListSchema,
+  providerResponseSchema,
+} from "./schemas";
 import {
   cleanTranslation,
   translationSystemPrompt,
@@ -15,12 +19,14 @@ const OAUTH_DUMMY_KEY = "opencode-oauth-dummy-key";
 const REQUEST_TIMEOUT_MS = 180_000;
 const providerOptionsSchema = z.record(z.string(), z.unknown());
 
+type ProviderResponse = z.infer<typeof providerResponseSchema>;
+
 type ProviderLog = (
   level: "warn" | "error",
   message: string,
   extra?: Record<string, unknown>,
 ) => Promise<void>;
-type ProviderList = () => Promise<{ error?: unknown; data?: unknown }>;
+type ProviderList = () => Promise<unknown>;
 
 function extractTranslation(value: unknown): MaybeUndefined<string> {
   const parsed = directTranslationResponseSchema.safeParse(value);
@@ -42,16 +48,24 @@ export function createDirectTranslator(
   direction: TranslationDirection,
 ) => Promise<MaybeUndefined<string>> {
   return async (text, model, direction) => {
-    let providerResponse: { error?: unknown; data?: unknown };
+    let providerResponse: ProviderResponse;
     try {
-      providerResponse = await listProviders();
+      const rawProviderResponse = await listProviders();
+      const parsedProviderResponse = providerResponseSchema.safeParse(rawProviderResponse);
+      if (!parsedProviderResponse.success) {
+        await log("warn", "Provider response was malformed", {
+          provider: model.providerID,
+        });
+        return undefined;
+      }
+      providerResponse = parsedProviderResponse.data;
     } catch (error) {
       await log("error", "Could not read OpenCode provider metadata", {
         error: String(error),
       });
       return undefined;
     }
-    if (providerResponse.error !== undefined || providerResponse.data === undefined) {
+    if (!("data" in providerResponse)) {
       await log("warn", "Provider metadata was unavailable", {
         provider: model.providerID,
       });

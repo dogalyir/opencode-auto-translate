@@ -101,8 +101,8 @@ Only the global file is read. Project-level `translate.json` files are ignored.
   "model": "openai/gpt-5.6-luna",
   "variant": "minimal",
   "lang": "Spanish",
-  "input": "show original",
-  "output": "show translation",
+  "input": "show original + translation",
+  "output": "show original + translation",
   "excluded_agents": ["general"]
 }
 ```
@@ -117,15 +117,16 @@ The published schema is generated from the same Zod schema used by both runtimes
 | `model`           | string   | unset           | Translation model in `provider/model` format. Overrides OpenCode's `small_model`.                                    |
 | `variant`         | string   | unset           | Optional provider-specific model variant.                                                                            |
 | `lang`            | string   | `English`       | Target language for assistant translations and the TUI badge.                                                        |
-| `input`           | enum     | `show original` | User-prompt display mode. Currently only `show original` is supported by OpenCode's transform API.                   |
+| `input`           | enum     | `show original` | User-prompt display mode.                                                                                              |
 | `output`          | enum     | `show original` | Assistant display mode.                                                                                              |
 | `excluded_agents` | string[] | `[]`            | Agent and sub-agent names that bypass all plugin behavior, including translation and the English system instruction. |
 
-Valid `output` values are:
+Valid `input` and `output` values are:
 
-- `show original`: display only the English assistant text.
-- `show translation`: display the English text, separator, and localized translation.
+- `show original`: display only the original text. For output this is English; for input this is the user's language.
 - `show original + translation`: display the same English text plus the `[Translation]` label and localized translation.
+
+With `input: "show original"`, original user text remains visible and is translated in the outbound message clone. The translation cache is held in memory and historical prompts can be translated again after an OpenCode restart. With `input: "show original + translation"`, the English translation is persisted in the canonical block and reused without retranslating when it is detected.
 
 The translation-inclusive format is:
 

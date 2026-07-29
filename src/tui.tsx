@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginModule } from "@opencode-ai/plugin/tui";
 import { createSignal } from "solid-js";
+import { tuiPublishResponseSchema } from "./schemas";
 import { loadPluginOptions } from "./config";
 import { TRANSLATION_EVENT, TRANSLATION_ID } from "./translation";
 
@@ -14,10 +15,16 @@ const tui: TuiPlugin = async (api, _directory, options) => {
   const initialState =
     typeof storedValue === "boolean" ? storedValue : pluginOptions.enabled === true;
   const [isEnabled, setEnabled] = createSignal(initialState);
-  const publish = async (enabled: boolean, showToast = true, rollbackOnFailure = true) => {
+  const publish = async (
+    enabled: boolean,
+    options: { showToast: boolean; rollbackOnFailure: boolean } = {
+      showToast: true,
+      rollbackOnFailure: true,
+    },
+  ) => {
     api.kv.set(KEY, enabled);
     setEnabled(enabled);
-    if (showToast)
+    if (options.showToast)
       api.ui.toast({
         title: "Auto-translation",
         message: enabled ? "Enabled" : "Disabled",
@@ -32,13 +39,19 @@ const tui: TuiPlugin = async (api, _directory, options) => {
           },
         },
       });
-      if (response.error === undefined) return;
-      console.warn("Auto-translation toggle rejected", String(response.error));
+      const parsedResponse = tuiPublishResponseSchema.safeParse(response);
+      if (!parsedResponse.success) {
+        console.warn("Auto-translation toggle returned malformed response");
+      } else if ("data" in parsedResponse.data) {
+        return;
+      } else {
+        console.warn("Auto-translation toggle rejected", String(parsedResponse.data.error));
+      }
     } catch (error) {
       console.warn("Auto-translation toggle publish failed", String(error));
       // Restore the local state when the server cannot receive the toggle.
     }
-    if (!rollbackOnFailure) return;
+    if (!options.rollbackOnFailure) return;
     setEnabled(!enabled);
     api.kv.set(KEY, !enabled);
     api.ui.toast({
@@ -48,7 +61,7 @@ const tui: TuiPlugin = async (api, _directory, options) => {
     });
   };
 
-  await publish(initialState, false, false);
+  await publish(initialState, { showToast: false, rollbackOnFailure: false });
 
   api.keymap.registerLayer({
     commands: [

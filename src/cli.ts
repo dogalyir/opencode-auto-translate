@@ -30,13 +30,17 @@ async function main(): Promise<void> {
     const variant = await promptInput("Model variant (leave blank for none)", "");
     const enabled =
       (await promptInput("Enable translation at startup? (y/n)", "y")).toLowerCase() !== "n";
-    const outputMode = await promptInput("Output mode (original/translation/both)", "translation");
-    let output: InstallerOptions["output"] = "show translation";
+    const inputMode = await promptInput("Input mode (original/both)", "original");
+    let input: InstallerOptions["input"] = "show original";
+    if (inputMode === "both") input = "show original + translation";
+    const outputMode = await promptInput("Output mode (original/both)", "original");
+    let output: InstallerOptions["output"] = "show original";
     if (outputMode === "original") output = "show original";
     if (outputMode === "both") output = "show original + translation";
     const options: InstallerOptions = {
       enabled,
       lang,
+      input,
       ...(model.length > 0 ? { model } : {}),
       ...(variant.length > 0 ? { variant } : {}),
       output,

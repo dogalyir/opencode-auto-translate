@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { loadPluginOptions } from "../src/config";
+import { configResponseEnvelopeSchema } from "../src/schemas";
+import { parseMessages, parseQuestionArgsTranslation } from "../src/server-parsing";
 import type { MaybeUndefined } from "../src/types";
 import {
   isTranslatablePart,
@@ -127,6 +129,25 @@ function createTranslationClient(prompt: () => Promise<unknown>) {
   };
 }
 
+test("server boundary parsers reject malformed and incomplete inputs", () => {
+  expect(parseQuestionArgsTranslation("not-json")).toBeUndefined();
+  expect(parseQuestionArgsTranslation(JSON.stringify({ questions: [] }))).toEqual({
+    questions: [],
+  });
+  expect(
+    parseQuestionArgsTranslation(JSON.stringify({ questions: [{ invalid: true }] })),
+  ).toBeUndefined();
+  expect(parseMessages([])).toEqual([]);
+  expect(parseMessages([{ info: {}, parts: [] }])).toBeUndefined();
+});
+
+test("configuration response envelopes require exactly one explicit state", () => {
+  expect(configResponseEnvelopeSchema.safeParse({ data: {} }).success).toBe(true);
+  expect(configResponseEnvelopeSchema.safeParse({ error: "failed" }).success).toBe(true);
+  expect(configResponseEnvelopeSchema.safeParse({}).success).toBe(false);
+  expect(configResponseEnvelopeSchema.safeParse({ data: {}, error: "failed" }).success).toBe(false);
+});
+
 test("server entrypoint exports only the plugin factory", () => {
   expect(Object.keys(serverModule)).toEqual(["default"]);
 });
@@ -177,7 +198,7 @@ test("translation prompt supports translating the response back to the configure
 
 test("display modes preserve English context", () => {
   expect(displayTranslation("Hello", "Hola", "show original")).toBe("Hello");
-  expect(displayTranslation("Hello", "Hola", "show translation")).toBe(
+  expect(displayTranslation("Hello", "Hola", "show original + translation")).toBe(
     "Hello\n\n----------------------------------------\n[Translation]\nHola",
   );
   expect(displayTranslation("Hello", "Hola", "show original + translation")).toBe(
@@ -186,7 +207,7 @@ test("display modes preserve English context", () => {
 });
 
 test("detects the canonical displayed translation block", () => {
-  const displayed = displayTranslation("Hello", "Hola", "show translation");
+  const displayed = displayTranslation("Hello", "Hola", "show original + translation");
   expect(hasDisplayedTranslation(displayed)).toBe(true);
   expect(extractOriginalTranslation(displayed)).toBe("Hello");
   expect(
@@ -217,7 +238,7 @@ test.serial(
     const displayed = displayTranslation(
       "English response",
       "Respuesta en español",
-      "show translation",
+      "show original + translation",
     );
     const output = {
       messages: [
@@ -236,6 +257,31 @@ test.serial(
     expect(firstPart.text).toBe("English response");
   },
 );
+
+test.serial("chat message stores original input with its English translation", async () => {
+  const createPlugin = getPluginFactory();
+  const client = createTranslationClient(async () => ({
+    data: { parts: [{ type: "text", text: "English request" }] },
+  }));
+  const plugin = await Reflect.apply(createPlugin, undefined, [
+    { client, directory: "/tmp" },
+    { enabled: true, input: "show original + translation", model: "openai/model" },
+  ]);
+  if (plugin === null || typeof plugin !== "object") throw new Error("Invalid plugin");
+  const hook = Reflect.get(plugin, "chat.message");
+  if (typeof hook !== "function") throw new Error("Missing chat message hook");
+
+  const output = {
+    message: { role: "user", sessionID: "session" },
+    parts: [{ id: "part", type: "text", text: "Solicitud original" }],
+  };
+  await Reflect.apply(hook, plugin, [{ sessionID: "session", agent: "build" }, output]);
+  const translatedPart = output.parts[0];
+  if (translatedPart === undefined) throw new Error("Missing translated part");
+  expect(translatedPart.text).toBe(
+    "Solicitud original\n\n----------------------------------------\n[Translation]\nEnglish request",
+  );
+});
 
 test("plugin options provide strict defaults and accept model display settings", () => {
   expect(pluginOptionsSchema.parse({})).toMatchObject({
@@ -258,9 +304,10 @@ test("plugin options provide strict defaults and accept model display settings",
     lang: "Spanish",
     excluded_agents: ["general"],
   });
-  expect(pluginOptionsSchema.parse({ small_model: "openai/legacy" })).not.toHaveProperty(
-    "small_model",
-  );
+  expect(pluginOptionsSchema.safeParse({ small_model: "openai/legacy" }).success).toBe(false);
+  expect(pluginOptionsSchema.parse({ $schema: "test-schema" })).toMatchObject({
+    $schema: "test-schema",
+  });
 });
 
 test("shared config is loaded before inline options", async () => {
@@ -272,7 +319,7 @@ test("shared config is loaded before inline options", async () => {
       join(directory, "translate.json"),
       JSON.stringify({
         lang: "Spanish",
-        output: "show translation",
+        output: "show original + translation",
         model: "openai/from-file",
       }),
     );
@@ -280,7 +327,7 @@ test("shared config is loaded before inline options", async () => {
       loadPluginOptions({ lang: "French", model: "openai/from-inline" }),
     ).resolves.toMatchObject({
       lang: "French",
-      output: "show translation",
+      output: "show original + translation",
       model: "openai/from-inline",
     });
   } finally {
@@ -297,7 +344,7 @@ test.serial("plugin skips all hooks for excluded agents", async () => {
   }));
   const plugin = await Reflect.apply(createPlugin, undefined, [
     { client, directory: "/tmp" },
-    { enabled: true, excluded_agents: ["general"], output: "show translation" },
+    { enabled: true, excluded_agents: ["general"], output: "show original + translation" },
   ]);
   if (plugin === null || typeof plugin !== "object") throw new Error("Invalid plugin");
   const messageTransform = Reflect.get(plugin, "experimental.chat.messages.transform");
@@ -536,7 +583,7 @@ test.serial(
       { client, directory: "/tmp" },
       {
         enabled: true,
-        output: "show translation",
+        output: "show original + translation",
         lang: "Spanish",
         model: "openai/model",
       },
@@ -570,7 +617,7 @@ test.serial("plugin instances do not append duplicate response translations", as
     { client, directory: "/tmp" },
     {
       enabled: true,
-      output: "show translation",
+      output: "show original + translation",
       lang: "Spanish",
       model: "openai/model",
     },
@@ -579,7 +626,7 @@ test.serial("plugin instances do not append duplicate response translations", as
     { client, directory: "/tmp" },
     {
       enabled: true,
-      output: "show translation",
+      output: "show original + translation",
       lang: "Spanish",
       model: "openai/model",
     },
@@ -657,7 +704,7 @@ test("translation hooks fail open when configuration lookup throws", async () =>
   };
   const plugin = await Reflect.apply(createPlugin, undefined, [
     { client, directory: "/tmp" },
-    { enabled: true, output: "show translation" },
+    { enabled: true, output: "show original + translation" },
   ]);
   if (plugin === null || (typeof plugin !== "object" && typeof plugin !== "function"))
     throw new Error("Invalid plugin hooks");

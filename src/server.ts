@@ -1,12 +1,18 @@
 import type { Plugin } from "@opencode-ai/plugin";
 import { z } from "zod";
 import { loadPluginOptions } from "./config";
-import { configResponseSchema, messagesSchema, questionAnswersSchema } from "./schemas";
+import {
+  configResponseEnvelopeSchema,
+  configResponseSchema,
+  questionAnswersSchema,
+} from "./schemas";
 import { createDirectTranslator } from "./provider";
-import type { MaybeUndefined } from "./types";
+import type { MaybeUndefined, QuestionTranslation, ToolOutput } from "./types";
+import { parseMessages, parseQuestionArgsTranslation } from "./server-parsing";
 import {
   displayTranslation,
   extractOriginalTranslation,
+  extractTranslatedTranslation,
   hasDisplayedTranslation,
   isTranslatablePart,
   parseModelRef,
@@ -17,28 +23,6 @@ import {
   type QuestionArgs,
   type TranslationDirection,
 } from "./translation";
-
-type MessageList = z.infer<typeof messagesSchema>;
-type QuestionTranslation = { original: QuestionArgs; localized: QuestionArgs };
-type ToolOutput = { output: string; metadata: unknown };
-
-function parseMessages(value: unknown): MaybeUndefined<MessageList> {
-  const parsed = messagesSchema.safeParse(value);
-  if (!parsed.success) return undefined;
-  return parsed.data;
-}
-
-function parseQuestionArgsTranslation(value: string): MaybeUndefined<QuestionArgs> {
-  let decoded: unknown;
-  try {
-    decoded = JSON.parse(value);
-  } catch {
-    return undefined;
-  }
-  const parsed = questionArgsSchema.safeParse(decoded);
-  if (!parsed.success) return undefined;
-  return parsed.data;
-}
 
 const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
   const pluginOptions = await loadPluginOptions(options);
@@ -200,8 +184,10 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
   async function resolveModel(): Promise<MaybeUndefined<ModelReference>> {
     try {
       const response = await client.config.get({ query: { directory } });
-      if (response.error !== undefined || response.data === undefined) return undefined;
-      const parsedConfig = configResponseSchema.safeParse(response.data);
+      const parsedResponse = configResponseEnvelopeSchema.safeParse(response);
+      if (!parsedResponse.success) return undefined;
+      if (!("data" in parsedResponse.data)) return undefined;
+      const parsedConfig = configResponseSchema.safeParse(parsedResponse.data.data);
       if (!parsedConfig.success) return undefined;
       return selectModel(parsedConfig.data.small_model);
     } catch (error) {
@@ -213,6 +199,24 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
   }
 
   return {
+    "chat.message": async (input, output) => {
+      if (!enabled || pluginOptions.input === "show original") return;
+      if (isExcludedSession(input.sessionID)) return;
+      const model = await resolveModel();
+      if (model === undefined) return;
+      for (const part of output.parts) {
+        if (!isTranslatablePart(part)) continue;
+        const original = part.text;
+        if (extractTranslatedTranslation(original) !== undefined) continue;
+        const translated = await getTranslation(
+          original,
+          model,
+          `${model.providerID}/${model.modelID}:input:${part.id}:${original}`,
+        );
+        if (translated !== undefined)
+          part.text = displayTranslation(original, translated, pluginOptions.input);
+      }
+    },
     event: async ({ event }) => {
       if (event.type !== "tui.command.execute") return;
       const command = event.properties.command;
@@ -248,6 +252,13 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
         if (message.info.role !== "user") continue;
         for (const part of message.parts) {
           if (!isTranslatablePart(part)) continue;
+          if (pluginOptions.input === "show original + translation") {
+            const translated = extractTranslatedTranslation(part.text);
+            if (translated !== undefined) {
+              part.text = translated;
+              continue;
+            }
+          }
           const key = `${model.providerID}/${model.modelID}:${part.id}:${part.text}`;
           const translated = await getTranslation(part.text, model, key);
           if (translated !== undefined) part.text = translated;

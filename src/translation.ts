@@ -3,13 +3,14 @@ import type { MaybeUndefined } from "./types";
 
 export const TRANSLATION_ID = "opencode-auto-translate";
 export const TRANSLATION_EVENT = `${TRANSLATION_ID}.toggle`;
-const DISPLAY_MODES = ["show original", "show translation", "show original + translation"] as const;
+const DISPLAY_MODES = ["show original", "show original + translation"] as const;
 const TRANSLATION_SEPARATOR = "----------------------------------------";
 const TRANSLATION_MARKER = `${TRANSLATION_SEPARATOR}\n[Translation]\n`;
 const TRANSLATION_SOURCE = "the source language";
 
 export const pluginOptionsSchema = z
   .object({
+    $schema: z.string().optional(),
     enabled: z
       .boolean()
       .optional()
@@ -38,6 +39,7 @@ export const pluginOptionsSchema = z
       description: "Agents and sub-agents excluded from all translation behavior.",
     }),
   })
+  .strict()
   .meta({
     title: "OpenCode Auto Translate configuration",
     description: "Global configuration for the opencode-auto-translate plugin.",
@@ -131,11 +133,24 @@ export function hasDisplayedTranslation(text: string): boolean {
 }
 
 export function extractOriginalTranslation(text: string): MaybeUndefined<string> {
+  const block = parseTranslationBlock(text);
+  return block === undefined ? undefined : text.slice(0, block.markerIndex);
+}
+
+export function extractTranslatedTranslation(text: string): MaybeUndefined<string> {
+  const block = parseTranslationBlock(text);
+  if (block === undefined) return undefined;
+  return block.translated;
+}
+
+function parseTranslationBlock(
+  text: string,
+): MaybeUndefined<{ markerIndex: number; translated: string }> {
   const markerIndex = text.lastIndexOf(`\n\n${TRANSLATION_MARKER}`);
   if (markerIndex <= 0) return undefined;
   const translated = text.slice(markerIndex + 2 + TRANSLATION_MARKER.length).trim();
   if (translated.length === 0) return undefined;
-  return text.slice(0, markerIndex);
+  return { markerIndex, translated };
 }
 
 export function parseToggleCommand(command: string): MaybeUndefined<boolean> {

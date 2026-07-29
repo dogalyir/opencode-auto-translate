@@ -25,6 +25,10 @@ test("registers server and TUI plugins idempotently", () => {
 test("refuses unsupported configuration roots", () => {
   expect(() => registerPlugin("// comment\n{}", "opencode.json")).toThrow("Cannot safely update");
   expect(() => registerPlugin('{"plugin":"other"}', "tui.json")).toThrow("plugin must be an array");
+  expect(() => registerPlugin('{"plugin":[42]}', "tui.json")).toThrow("plugin entries are invalid");
+  expect(() => registerPlugin('{"plugin":[["other",42]]}', "tui.json")).toThrow(
+    "plugin entries are invalid",
+  );
 });
 
 test("creates the guided translation configuration", () => {
@@ -34,7 +38,8 @@ test("creates the guided translation configuration", () => {
         enabled: true,
         lang: "Spanish",
         model: "openai/model",
-        output: "show translation",
+        input: "show original",
+        output: "show original + translation",
       }),
     ),
   ).toEqual({
@@ -42,6 +47,7 @@ test("creates the guided translation configuration", () => {
     enabled: true,
     lang: "Spanish",
     model: "openai/model",
-    output: "show translation",
+    input: "show original",
+    output: "show original + translation",
   });
 });

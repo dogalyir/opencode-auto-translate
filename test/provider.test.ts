@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { createDirectTranslator } from "../src/provider";
+import { providerResponseSchema } from "../src/schemas";
 import type { ModelReference } from "../src/translation";
 
 const model: ModelReference = { providerID: "provider", modelID: "model" };
@@ -31,6 +32,27 @@ function createTranslator(providerData: unknown, response: Response | Error) {
   );
   return { logs, translator };
 }
+
+test("provider response envelopes require exactly one explicit state", () => {
+  expect(providerResponseSchema.safeParse({ data: {} }).success).toBe(true);
+  expect(providerResponseSchema.safeParse({ error: "failed" }).success).toBe(true);
+  expect(providerResponseSchema.safeParse({}).success).toBe(false);
+  expect(providerResponseSchema.safeParse({ data: {}, error: "failed" }).success).toBe(false);
+});
+
+test.serial("provider transport rejects malformed response envelopes", async () => {
+  const logs: string[] = [];
+  const translator = createDirectTranslator(
+    async () => ({ data: "invalid" }),
+    async (_level, message) => {
+      logs.push(message);
+    },
+    "English",
+    undefined,
+  );
+  expect(await translator("hola", model, "to-english")).toBeUndefined();
+  expect(logs).toEqual(["Provider response was malformed"]);
+});
 
 test.serial("provider transport logs malformed metadata and fails open", async () => {
   const { logs, translator } = createTranslator({ all: "invalid" }, new Response());

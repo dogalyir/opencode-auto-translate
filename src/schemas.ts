@@ -1,6 +1,14 @@
 import { z } from "zod";
 
+export const configResponseEnvelopeSchema = z.union([
+  z.object({ data: z.unknown() }).strict(),
+  z.object({ error: z.unknown() }).strict(),
+]);
 export const configResponseSchema = z.object({ small_model: z.unknown().optional() }).passthrough();
+export const tuiPublishResponseSchema = z.union([
+  z.object({ data: z.boolean() }).strict(),
+  z.object({ error: z.unknown() }).strict(),
+]);
 const providerModelSchema = z.object({
   id: z.string().optional(),
   api: z.object({ id: z.string().optional(), url: z.string().optional() }).optional(),
@@ -15,6 +23,10 @@ const providerSchema = z.object({
   models: z.record(z.string(), providerModelSchema).optional(),
 });
 export const providerListSchema = z.object({ all: z.array(providerSchema) });
+export const providerResponseSchema = z.union([
+  z.object({ data: z.record(z.string(), z.unknown()) }).strict(),
+  z.object({ error: z.unknown() }).strict(),
+]);
 export const directTranslationResponseSchema = z.object({
   choices: z.array(
     z.object({

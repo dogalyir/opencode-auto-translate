@@ -5,8 +5,14 @@ import type { PluginOptions } from "./translation";
 
 const PACKAGE_NAME = "opencode-auto-translate@latest";
 const SCHEMA_URL = "https://unpkg.com/opencode-auto-translate@latest/dist/translate.schema.json";
+const pluginEntrySchema = z.union([
+  z.string(),
+  z.tuple([z.string().min(1), z.record(z.string(), z.unknown())]),
+]);
 
-export type InstallerOptions = Required<Pick<PluginOptions, "enabled" | "lang" | "output">> &
+export type InstallerOptions = Required<
+  Pick<PluginOptions, "enabled" | "lang" | "input" | "output">
+> &
   Pick<PluginOptions, "model" | "variant">;
 
 export function getConfigDirectory(environment: NodeJS.ProcessEnv = process.env): string {
@@ -34,13 +40,16 @@ export function registerPlugin(text: string, filePath: string): string {
   if (plugins === undefined) {
     config["plugin"] = [PACKAGE_NAME];
   } else if (Array.isArray(plugins)) {
+    const parsedPlugins = z.array(pluginEntrySchema).safeParse(plugins);
+    if (!parsedPlugins.success)
+      throw new Error(`Cannot safely update ${filePath}: plugin entries are invalid`);
     if (
       !plugins.some(
         (plugin) =>
           plugin === PACKAGE_NAME || (Array.isArray(plugin) && plugin[0] === PACKAGE_NAME),
       )
     )
-      config["plugin"] = [...plugins, PACKAGE_NAME];
+      config["plugin"] = [...parsedPlugins.data, PACKAGE_NAME];
   } else {
     throw new Error(`Cannot safely update ${filePath}: plugin must be an array`);
   }
@@ -52,6 +61,7 @@ export function createTranslationConfig(options: InstallerOptions): string {
     $schema: SCHEMA_URL,
     enabled: options.enabled,
     lang: options.lang,
+    input: options.input,
     output: options.output,
   };
   if (options.model !== undefined) config["model"] = options.model;
