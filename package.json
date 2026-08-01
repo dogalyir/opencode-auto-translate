@@ -1,6 +1,6 @@
 {
   "name": "opencode-auto-translate",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Translate user prompts to English and assistant responses to the configured language in OpenCode.",
   "keywords": [
     "ai-agents",
