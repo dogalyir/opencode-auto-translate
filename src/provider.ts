@@ -2,6 +2,9 @@ import { z } from "zod";
 import { sessionPromptResponseSchema } from "./schemas";
 import {
   cleanTranslation,
+  batchTranslationPrompt,
+  batchTranslationSystemPrompt,
+  parseBatchTranslation,
   translationSystemPrompt,
   type ModelReference,
   type TranslationDirection,
@@ -55,12 +58,23 @@ export function createSessionTranslator(
   language: string,
   log: TranslatorLog,
   translatorSessions: Set<string>,
-): (
-  text: string,
-  model: ModelReference,
-  direction: TranslationDirection,
-) => Promise<MaybeUndefined<string>> {
-  return async (text, model, direction) => {
+): {
+  translate: (
+    text: string,
+    model: ModelReference,
+    direction: TranslationDirection,
+  ) => Promise<MaybeUndefined<string>>;
+  translateBatch: (
+    texts: readonly string[],
+    model: ModelReference,
+    direction: TranslationDirection,
+  ) => Promise<MaybeUndefined<string[]>>;
+} {
+  async function runPrompt(
+    text: string,
+    model: ModelReference,
+    system: string,
+  ): Promise<MaybeUndefined<string>> {
     let sessionID: string | undefined;
     try {
       const created = await client.session.create({
@@ -80,7 +94,7 @@ export function createSessionTranslator(
         body: {
           agent: TRANSLATOR_AGENT,
           model,
-          system: translationSystemPrompt(direction, language),
+          system,
           tools: { "*": false },
           parts: [{ type: "text", text }],
         },
@@ -93,11 +107,36 @@ export function createSessionTranslator(
       if (sessionID !== undefined) {
         translatorSessions.delete(sessionID);
         try {
-          await client.session.delete({ path: { id: sessionID }, query: { directory } });
+          await client.session.delete({
+            path: { id: sessionID },
+            query: { directory },
+          });
         } catch (error) {
-          await log("warn", "Could not delete translation session", { error: String(error) });
+          await log("warn", "Could not delete translation session", {
+            error: String(error),
+          });
         }
       }
     }
-  };
+  }
+
+  async function run(text: string, model: ModelReference, direction: TranslationDirection) {
+    return runPrompt(text, model, translationSystemPrompt(direction, language));
+  }
+
+  async function translateBatch(
+    texts: readonly string[],
+    model: ModelReference,
+    direction: TranslationDirection,
+  ): Promise<MaybeUndefined<string[]>> {
+    if (texts.length === 0) return [];
+    const translated = await runPrompt(
+      batchTranslationPrompt(texts),
+      model,
+      batchTranslationSystemPrompt(direction, language),
+    );
+    return translated === undefined ? undefined : parseBatchTranslation(translated, texts.length);
+  }
+
+  return { translate: run, translateBatch };
 }

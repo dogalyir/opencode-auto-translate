@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { loadPluginOptions } from "../src/config";
 import { configResponseEnvelopeSchema } from "../src/schemas";
-import { parseMessages, parseQuestionArgsTranslation } from "../src/server-parsing";
+import { parseMessages } from "../src/server-parsing";
 import type { MaybeUndefined } from "../src/types";
 import {
   isTranslatablePart,
@@ -17,6 +17,9 @@ import {
   displayTranslation,
   extractOriginalTranslation,
   hasDisplayedTranslation,
+  batchTranslationPrompt,
+  batchTranslationSystemPrompt,
+  parseBatchTranslation,
 } from "../src/translation";
 
 const serverModule = await import("../src/server");
@@ -88,8 +91,8 @@ function createTranslationClient(prompt: () => Promise<unknown>) {
         const data = record.success
           ? z.record(z.string(), z.unknown()).safeParse(record.data["data"])
           : undefined;
-        const parts = data?.success ? data.data["parts"] : undefined;
-        const first = Array.isArray(parts) ? parts[0] : undefined;
+        const parts = data !== undefined && data.success ? data.data["parts"] : undefined;
+        const first = Array.isArray(parts) && parts.length > 0 ? parts[0] : undefined;
         const firstRecord = z.record(z.string(), z.unknown()).safeParse(first);
         const text =
           firstRecord.success && typeof firstRecord.data["text"] === "string"
@@ -110,13 +113,6 @@ function createTranslationClient(prompt: () => Promise<unknown>) {
 }
 
 test("server boundary parsers reject malformed and incomplete inputs", () => {
-  expect(parseQuestionArgsTranslation("not-json")).toBeUndefined();
-  expect(parseQuestionArgsTranslation(JSON.stringify({ questions: [] }))).toEqual({
-    questions: [],
-  });
-  expect(
-    parseQuestionArgsTranslation(JSON.stringify({ questions: [{ invalid: true }] })),
-  ).toBeUndefined();
   expect(parseMessages([])).toEqual([]);
   expect(parseMessages([{ info: {}, parts: [] }])).toBeUndefined();
 });
@@ -182,6 +178,26 @@ test("translation system prompt requests output without commentary", () => {
 test("translation prompt supports translating the response back to the configured language", () => {
   const prompt = translationSystemPrompt("from-english", "Spanish");
   expect(prompt).toContain("from English to Spanish");
+});
+
+test("batch translation prompts and parser preserve indexed segments", () => {
+  expect(batchTranslationSystemPrompt("from-english", "Spanish")).toContain("exactly one segment");
+  expect(batchTranslationPrompt(["one", "two"])).toBe(
+    '<segment index="1">\none\n</segment>\n<segment index="2">\ntwo\n</segment>',
+  );
+  expect(
+    parseBatchTranslation('<segment index="1">uno</segment>\n<segment index="2">dos</segment>', 2),
+  ).toEqual(["uno", "dos"]);
+});
+
+test("batch translation parser rejects malformed or incomplete responses", () => {
+  expect(parseBatchTranslation("uno", 1)).toBeUndefined();
+  expect(parseBatchTranslation('<segment index="2">dos</segment>', 2)).toBeUndefined();
+  expect(
+    parseBatchTranslation('<segment index="1">uno</segment>\n<segment index="1">uno</segment>', 2),
+  ).toBeUndefined();
+  expect(parseBatchTranslation('<segment index="1">uno</segment> extra', 1)).toBeUndefined();
+  expect(parseBatchTranslation("", 0)).toEqual([]);
 });
 
 test("display modes preserve English context", () => {
@@ -253,7 +269,11 @@ test.serial("chat message stores original input with its English translation", a
   }));
   const plugin = await Reflect.apply(createPlugin, undefined, [
     { client, directory: "/tmp" },
-    { enabled: true, input: "show original + translation", model: "openai/model" },
+    {
+      enabled: true,
+      input: "show original + translation",
+      model: "openai/model",
+    },
   ]);
   if (plugin === null || typeof plugin !== "object") throw new Error("Invalid plugin");
   const hook = Reflect.get(plugin, "chat.message");
@@ -333,7 +353,11 @@ test.serial("plugin skips all hooks for excluded agents", async () => {
   }));
   const plugin = await Reflect.apply(createPlugin, undefined, [
     { client, directory: "/tmp" },
-    { enabled: true, excluded_agents: ["general"], output: "show original + translation" },
+    {
+      enabled: true,
+      excluded_agents: ["general"],
+      output: "show original + translation",
+    },
   ]);
   if (plugin === null || typeof plugin !== "object") throw new Error("Invalid plugin");
   const messageHook = Reflect.get(plugin, "chat.message");
@@ -348,12 +372,17 @@ test.serial("plugin skips all hooks for excluded agents", async () => {
   )
     throw new Error("Missing plugin hooks");
 
-  const initialMessage = { parts: [{ id: "initial-part", type: "text", text: "hola" }] };
+  const initialMessage = {
+    parts: [{ id: "initial-part", type: "text", text: "hola" }],
+  };
   await Reflect.apply(messageHook, plugin, [
     { sessionID: "initial-session", agent: "general" },
     initialMessage,
   ]);
-  expect(initialMessage.parts[0]?.text).toBe("hola");
+  expect(initialMessage.parts.length).toBeGreaterThan(0);
+  const initialPart = initialMessage.parts[0];
+  if (initialPart === undefined) throw new Error("Missing initial message part");
+  expect(initialPart.text).toBe("hola");
 
   const initialSystem: { system: string[] } = { system: [] };
   await Reflect.apply(systemTransform, plugin, [{ sessionID: "initial-session" }, initialSystem]);
@@ -407,7 +436,12 @@ test.serial("plugin replaces the original message with the translation", async (
       create: async () => ({ data: { id: "translation-session" } }),
       prompt: async (options: Record<string, unknown>) => {
         requestedPrompt = options;
-        return { data: { info: { role: "assistant" }, parts: [{ type: "text", text: "hello" }] } };
+        return {
+          data: {
+            info: { role: "assistant" },
+            parts: [{ type: "text", text: "hello" }],
+          },
+        };
       },
       delete: async () => ({}),
     },
@@ -491,15 +525,8 @@ test.serial(
   "plugin translates question dialogs before display and restores option labels",
   async () => {
     const createPlugin = getPluginFactory();
-    let translatedQuestion = JSON.stringify({
-      questions: [
-        {
-          question: "¿Qué modo?",
-          header: "Modo",
-          options: [{ label: "Completo", description: "Instala todo" }],
-        },
-      ],
-    });
+    let translatedQuestion =
+      '<segment index="1">¿Qué modo?</segment>\n<segment index="2">Modo</segment>\n<segment index="3">Completo</segment>\n<segment index="4">Instala todo</segment>';
     const client = createTranslationClient(async () => {
       return {
         data: {
