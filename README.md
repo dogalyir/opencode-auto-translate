@@ -103,7 +103,9 @@ Only the global file is read. Project-level `translate.json` files are ignored.
   "lang": "Spanish",
   "input": "show original + translation",
   "output": "show original + translation",
-  "excluded_agents": ["general"]
+  "excluded_agents": ["general"],
+  "verbose": false,
+  "show_translation_failures": false
 }
 ```
 
@@ -111,15 +113,17 @@ The published schema is generated from the same Zod schema used by both runtimes
 
 ### Options
 
-| Option            | Type     | Default         | Description                                                                                                          |
-| ----------------- | -------- | --------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `enabled`         | boolean  | unset           | Initial translation state used when no persisted TUI state exists.                                                   |
-| `model`           | string   | unset           | Translation model in `provider/model` format. Overrides OpenCode's `small_model`.                                    |
-| `variant`         | string   | unset           | Reserved optional provider-specific model variant. It is stored in configuration but is not currently passed to translation sessions. |
-| `lang`            | string   | `English`       | Target language for assistant translations and the TUI badge.                                                        |
-| `input`           | enum     | `show original + translation` | User-prompt display mode.                                                                                   |
-| `output`          | enum     | `show original + translation` | Assistant display mode.                                                                                    |
-| `excluded_agents` | string[] | `[]`            | Agent and sub-agent names that bypass all plugin behavior, including translation and the English system instruction. |
+| Option                      | Type     | Default                       | Description                                                                                                                           |
+| --------------------------- | -------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                   | boolean  | unset                         | Initial translation state used when no persisted TUI state exists.                                                                    |
+| `model`                     | string   | unset                         | Translation model in `provider/model` format. Overrides OpenCode's `small_model`.                                                     |
+| `variant`                   | string   | unset                         | Reserved optional provider-specific model variant. It is stored in configuration but is not currently passed to translation sessions. |
+| `lang`                      | string   | `English`                     | Target language for assistant translations and the TUI badge.                                                                         |
+| `input`                     | enum     | `show original + translation` | User-prompt display mode.                                                                                                             |
+| `output`                    | enum     | `show original + translation` | Assistant display mode.                                                                                                               |
+| `excluded_agents`           | string[] | `[]`                          | Agent and sub-agent names that bypass all plugin behavior, including translation and the English system instruction.                  |
+| `verbose`                   | boolean  | `false`                       | Log translation metrics without logging translated content.                                                                           |
+| `show_translation_failures` | boolean  | `false`                       | Show a visible marker when assistant translation fails.                                                                               |
 
 Valid `input` and `output` values are:
 
@@ -183,7 +187,7 @@ Both model values must use the `provider/model` format. Configure `small_model` 
 
 Input translation changes only the model-facing message, so visible user history keeps the original text. Tool calls, tool arguments, tool output, reasoning, code, paths, URLs, commands, diffs, and errors are not translated. `question` tool prompts are localized before display, and their selected answers are restored to English before the model receives them. Permission prompts remain English because the current plugin API does not expose a safe mutable display hook for them.
 
-Each translation uses the configured provider directly, and repeated text is cached for the current plugin instance. Direct requests still incur provider cost.
+Each translation uses a temporary OpenCode session with the configured model, and repeated text is cached for the current plugin instance. Batch translation reduces requests for multi-part messages and question dialogs.
 
 If configuration lookup, provider discovery, direct translation, response parsing, or authentication fails, the original content remains unchanged and the failure is logged without breaking the main request.
 
