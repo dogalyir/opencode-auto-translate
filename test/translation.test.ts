@@ -336,15 +336,35 @@ test.serial("plugin skips all hooks for excluded agents", async () => {
     { enabled: true, excluded_agents: ["general"], output: "show original + translation" },
   ]);
   if (plugin === null || typeof plugin !== "object") throw new Error("Invalid plugin");
+  const messageHook = Reflect.get(plugin, "chat.message");
   const messageTransform = Reflect.get(plugin, "experimental.chat.messages.transform");
   const systemTransform = Reflect.get(plugin, "experimental.chat.system.transform");
   const responseTransform = Reflect.get(plugin, "experimental.text.complete");
   if (
+    typeof messageHook !== "function" ||
     typeof messageTransform !== "function" ||
     typeof systemTransform !== "function" ||
     typeof responseTransform !== "function"
   )
     throw new Error("Missing plugin hooks");
+
+  const initialMessage = { parts: [{ id: "initial-part", type: "text", text: "hola" }] };
+  await Reflect.apply(messageHook, plugin, [
+    { sessionID: "initial-session", agent: "general" },
+    initialMessage,
+  ]);
+  expect(initialMessage.parts[0]?.text).toBe("hola");
+
+  const initialSystem: { system: string[] } = { system: [] };
+  await Reflect.apply(systemTransform, plugin, [{ sessionID: "initial-session" }, initialSystem]);
+  expect(initialSystem.system).toEqual([]);
+
+  const initialResponse = { text: "hello" };
+  await Reflect.apply(responseTransform, plugin, [
+    { sessionID: "initial-session", partID: "initial-response-part" },
+    initialResponse,
+  ]);
+  expect(initialResponse.text).toBe("hello");
 
   const output = {
     messages: [

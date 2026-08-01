@@ -194,6 +194,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
     "chat.message": async (input, output) => {
       if (!enabled || pluginOptions.input === "show original") return;
       if (translatorSessions.has(input.sessionID)) return;
+      if (input.agent !== undefined) sessionAgents.set(input.sessionID, input.agent);
       if (isExcludedSession(input.sessionID)) return;
       const model = await resolveModel();
       if (model === undefined) return;
