@@ -11,6 +11,7 @@ import type { MaybeUndefined, QuestionTranslation, ToolOutput } from "./types";
 import { parseMessages } from "./server-parsing";
 import {
   displayTranslation,
+  displayInputTranslation,
   displayTranslationFailure,
   extractOriginalTranslation,
   extractTranslatedTranslation,
@@ -297,7 +298,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
           `${model.providerID}/${model.modelID}:input:${part.id}:${original}`,
         );
         if (translated !== undefined)
-          part.text = displayTranslation(original, translated, pluginOptions.input);
+          part.text = displayInputTranslation(original, translated, pluginOptions.input);
       }
     },
     event: async ({ event }) => {
@@ -334,6 +335,7 @@ const AutoTranslatePlugin: Plugin = async ({ client, directory }, options) => {
           remember(sessionAgents, message.info.sessionID, message.info.agent, MAX_RETAINED_ENTRIES);
         if (isExcludedSession(message.info.sessionID)) continue;
         if (message.info.role !== "user") continue;
+        if (pluginOptions.input === "translation") continue;
         const pending = message.parts.filter(isTranslatablePart);
         const texts = pending.map((part) =>
           pluginOptions.input === "show original + translation"

@@ -3,7 +3,8 @@ import type { MaybeUndefined } from "./types";
 
 export const TRANSLATION_ID = "opencode-auto-translate";
 export const TRANSLATION_EVENT = `${TRANSLATION_ID}.toggle`;
-const DISPLAY_MODES = ["show original", "show original + translation"] as const;
+const INPUT_MODES = ["show original", "translation", "show original + translation"] as const;
+const OUTPUT_MODES = ["show original", "show original + translation"] as const;
 const TRANSLATION_SEPARATOR = "----------------------------------------";
 const TRANSLATION_MARKER = `${TRANSLATION_SEPARATOR}\n[Translation]\n`;
 const TRANSLATION_SOURCE = "the source language";
@@ -29,10 +30,10 @@ export const pluginOptionsSchema = z
       description: "Language used for translating assistant responses.",
     }),
     input: z
-      .enum(DISPLAY_MODES)
+      .enum(INPUT_MODES)
       .default("show original + translation")
       .meta({ description: "How translated user prompts are displayed." }),
-    output: z.enum(DISPLAY_MODES).default("show original + translation").meta({
+    output: z.enum(OUTPUT_MODES).default("show original + translation").meta({
       description: "How translated assistant responses are displayed.",
     }),
     excluded_agents: z.array(z.string().trim().min(1)).default([]).meta({
@@ -180,6 +181,16 @@ export function displayTranslation(
   translated: string,
   mode: PluginOptions["output"],
 ): string {
+  if (mode === "show original") return original;
+  return `${original}\n\n${TRANSLATION_MARKER}${translated}`;
+}
+
+export function displayInputTranslation(
+  original: string,
+  translated: string,
+  mode: PluginOptions["input"],
+): string {
+  if (mode === "translation") return translated;
   if (mode === "show original") return original;
   return `${original}\n\n${TRANSLATION_MARKER}${translated}`;
 }

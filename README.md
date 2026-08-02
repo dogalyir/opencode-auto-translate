@@ -128,9 +128,12 @@ The published schema is generated from the same Zod schema used by both runtimes
 Valid `input` and `output` values are:
 
 - `show original`: display only the original text. For output this is English; for input this is the user's language.
+- `translation`: for input only, display the translated English prompt without the original text. The translation is reused when sending the prompt to the model.
 - `show original + translation`: display the same English text plus the `[Translation]` label and localized translation.
 
 With `input: "show original"`, original user text remains visible and is translated in the outbound message clone. The translation cache is held in memory and historical prompts can be translated again after an OpenCode restart. With `input: "show original + translation"`, the English translation is persisted in the canonical block and reused without retranslating when it is detected.
+
+With `input: "translation"`, the user message is replaced with its English translation for display and model context. Historical messages already in English are not translated again.
 
 The translation-inclusive format is:
 

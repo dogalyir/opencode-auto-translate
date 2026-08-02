@@ -15,6 +15,7 @@ import {
   parseToggleCommand,
   translationSystemPrompt,
   displayTranslation,
+  displayInputTranslation,
   extractOriginalTranslation,
   hasDisplayedTranslation,
   batchTranslationPrompt,
@@ -210,6 +211,12 @@ test("display modes preserve English context", () => {
   );
 });
 
+test("input translation mode displays only the translated text", () => {
+  expect(displayInputTranslation("Hola", "Hello", "translation")).toBe("Hello");
+  expect(pluginOptionsSchema.parse({ input: "translation" }).input).toBe("translation");
+  expect(pluginOptionsSchema.safeParse({ output: "translation" }).success).toBe(false);
+});
+
 test("detects the canonical displayed translation block", () => {
   const displayed = displayTranslation("Hello", "Hola", "show original + translation");
   expect(hasDisplayedTranslation(displayed)).toBe(true);
@@ -289,6 +296,43 @@ test.serial("chat message stores original input with its English translation", a
   expect(translatedPart.text).toBe(
     "Solicitud original\n\n----------------------------------------\n[Translation]\nEnglish request",
   );
+});
+
+test.serial("translation-only input is not translated again before the model call", async () => {
+  const createPlugin = getPluginFactory();
+  let translationCalls = 0;
+  const client = createTranslationClient(async () => {
+    translationCalls += 1;
+    return { data: { parts: [{ type: "text", text: "English request" }] } };
+  });
+  const plugin = await Reflect.apply(createPlugin, undefined, [
+    { client, directory: "/tmp" },
+    { enabled: true, input: "translation", model: "openai/model" },
+  ]);
+  if (plugin === null || typeof plugin !== "object") throw new Error("Invalid plugin");
+  const messageHook = Reflect.get(plugin, "chat.message");
+  const messageTransform = Reflect.get(plugin, "experimental.chat.messages.transform");
+  if (typeof messageHook !== "function" || typeof messageTransform !== "function")
+    throw new Error("Missing message hooks");
+
+  const message = {
+    message: { role: "user", sessionID: "session" },
+    parts: [{ id: "part", type: "text", text: "Solicitud original" }],
+  };
+  await Reflect.apply(messageHook, plugin, [{ sessionID: "session" }, message]);
+  expect(message.parts[0]?.text).toBe("English request");
+
+  const transformed = {
+    messages: [
+      {
+        info: { role: "user", sessionID: "session" },
+        parts: [{ id: "part", type: "text", text: "English request" }],
+      },
+    ],
+  };
+  await Reflect.apply(messageTransform, plugin, [{}, transformed]);
+  expect(transformed.messages[0]?.parts[0]?.text).toBe("English request");
+  expect(translationCalls).toBe(1);
 });
 
 test("plugin options provide strict defaults and accept model display settings", () => {
