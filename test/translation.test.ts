@@ -493,6 +493,7 @@ test.serial("plugin replaces the original message with the translation", async (
   const plugin = await Reflect.apply(createPlugin, undefined, [
     { client, directory: "/tmp" },
     {
+      input: "show original + translation",
       output: "show original + translation",
       lang: "Spanish",
       model: "openai/override",
